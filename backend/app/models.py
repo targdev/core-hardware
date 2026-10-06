@@ -1,6 +1,6 @@
 """Modelos Pydantic para validação e serialização de dados da API de Chat."""
 
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -26,10 +26,14 @@ class ChatRequest(BaseModel):
         default_factory=list,
         description="Histórico anterior de mensagens para contexto da conversa",
     )
+    provider: Optional[str] = Field(
+        default="auto",
+        description="Provedor de IA desejado: 'grok', 'gemini' ou 'auto'",
+    )
 
 
 class ChatResponse(BaseModel):
-    """Payload de saída do endpoint de chat."""
+    """Payload de saída do endpoint de chat com dados de dashboard opcionais."""
 
     reply: str = Field(
         ...,
@@ -39,4 +43,12 @@ class ChatResponse(BaseModel):
         default_factory=list,
         description="Lista de ferramentas de estoque invocadas pelo modelo",
         examples=[["consultar_estoque"]],
+    )
+    dashboard_data: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Dados de telemetria, benchmark e mini dashboard de comparação pré-montados",
+    )
+    provider: str = Field(
+        default="fallback_core",
+        description="Provedor de inteligência artificial que atendeu a requisição ('grok', 'gemini' ou 'fallback_core')",
     )

@@ -64,11 +64,14 @@ def chat_endpoint(request: ChatRequest) -> ChatResponse:
         resultado = ai_service.processar_mensagem(
             message=request.message,
             history=history_dicts,
+            provider=request.provider,
         )
 
         return ChatResponse(
             reply=resultado["reply"],
             tools_called=resultado.get("tools_called", []),
+            dashboard_data=resultado.get("dashboard_data"),
+            provider=resultado.get("provider", "fallback_core"),
         )
     except Exception as exc:
         logger.error("Erro interno ao processar chat: %s", exc, exc_info=True)
