@@ -1,17 +1,25 @@
 # CORE Hardware — Chatbot Inteligente de Atendimento & Estoque
 
-Assistente conversacional oficial da **CORE Hardware** desenvolvido com arquitetura moderna full-stack para atender clientes com alta precisão técnica sobre computadores, notebooks de alto desempenho, monitores 4K e periféricos.
+Assistente conversacional oficial da **CORE Hardware** desenvolvido com arquitetura moderna full-stack para atender clientes com alta precisão técnica sobre computadores, notebooks de alto desempenho, placas de vídeo RTX, monitores 4K e periféricos.
 
-O assistente integra a API do Google Gemini com **Tool / Function Calling**, garantindo que as respostas de disponibilidade, quantidades em estoque e valores monetários venham diretamente da base de dados oficial e não de alucinações. Conta com **Fallback Determinístico Inteligente** caso a chave de API não esteja configurada ou ocorra indisponibilidade temporária de rede.
+O assistente integra as IAs **Grok (xAI)** e **Google Gemini** com **Tool / Function Calling**, garantindo que as respostas de disponibilidade, quantidades em estoque e valores monetários venham diretamente da base de dados oficial e não de alucinações. O sistema inclui **Mini Dashboards Gráficos de Comparação e Telemetria de Hardware** pré-montados e **Fallback Determinístico Inteligente** caso as chaves de API não estejam configuradas.
 
 ---
 
 ## 🛠️ Stack Tecnológica
 
 - **Backend:** Python 3.10+, FastAPI, Uvicorn, Pydantic v2, Google GenAI SDK (`google-genai`), Pytest, HTTPX, python-dotenv.
-- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons (Design Dark Zinc / Titanium Hardware moderno com badges de Tool Calling).
-- **Inteligência Artificial:** Google Gemini (`gemini-2.5-flash`) com Function/Tool Calling declarativo (`consultar_estoque`, `listar_produtos`).
-- **Arquitetura de Testes:** Suíte automatizada com Pytest cobrindo regras de negócio de estoque e testes de integração com `TestClient` e Mocks.
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons (Design Dark Zinc / Titanium Hardware moderno com seletor de IA e badges de Tool Calling).
+- **Inteligência Artificial:** 
+  - **Grok (xAI):** Suporte nativo via `grok-2-latest` com Function Calling via OpenAI/xAI API schema.
+  - **Google Gemini:** `gemini-2.5-flash` com Function Calling declarativo.
+  - **CORE Engine (Fallback):** Mecanismo determinístico local com telemetria e estoque em tempo real.
+- **Mini Dashboards Pré-Montados:**
+  - Comparativo de Notebooks (MacBook Air M3 vs Dell XPS 13 Plus vs Lenovo Legion Pro 5).
+  - Telemetria de GPU RTX 4060 Ti com taxas médias de quadros (FPS em Cyberpunk, Warzone, etc.).
+  - Comparativo de Periféricos de Elite (Logitech MX Master 3S + Keychron K2 Pro).
+  - Análise de Fidelidade de Cores e USB-C Hub do Monitor Dell UltraSharp 27" 4K.
+- **Arquitetura de Testes:** Suíte automatizada com Pytest cobrindo regras de negócio de estoque, dashboards e testes de integração com `TestClient` e Mocks.
 
 ---
 
@@ -54,7 +62,7 @@ O assistente integra a API do Google Gemini com **Tool / Function Calling**, gar
    ```bash
    cp .env.example .env
    ```
-   > **Nota de Resiliência:** Caso não informe a variável `GEMINI_API_KEY` ou não crie o `.env`, o sistema ativará automaticamente o **Fallback Determinístico Inteligente**, permitindo testar e avaliar todas as consultas de estoque sem interrupções.
+   > **Nota de Resiliência:** Caso não informe `XAI_API_KEY` ou `GEMINI_API_KEY`, o sistema ativará automaticamente o **Fallback Determinístico Inteligente**, permitindo testar todas as consultas de estoque, comparativos e mini dashboards sem interrupções.
 
 4. Execute a suíte de testes unitários e de integração:
    ```bash
@@ -92,7 +100,7 @@ O assistente integra a API do Google Gemini com **Tool / Function Calling**, gar
 
 ## 🧪 Suíte de Testes Automatizados
 
-A aplicação possui 2 arquivos de testes principais que cobrem todos os requisitos:
+A aplicação possui 3 arquivos de testes cobrindo todos os requisitos funcionais:
 
 1. **`backend/tests/test_inventory.py`:**
    - **Cenário A:** Busca por produto existente (ex: "MacBook", "MX Master 3S") retornando disponibilidade e estoque > 0.
@@ -107,6 +115,12 @@ A aplicação possui 2 arquivos de testes principais que cobrem todos os requisi
    - Rejeição de requisições inválidas com `422 Unprocessable Entity`.
    - Endpoint de verificação de integridade (`/api/health`).
 
+3. **`backend/tests/test_benchmarks.py`:**
+   - Validação da estrutura de dados do dashboard comparativo de notebooks.
+   - Telemetria de GPU RTX 4060 Ti e taxas médias de FPS.
+   - Comparativo de periféricos (MX Master 3S vs Keychron K2 Pro).
+   - Detecção automática de intenções de benchmark e comparação.
+
 ---
 
 ## 🌲 Disciplina de Git & Branches
@@ -116,10 +130,9 @@ O projeto segue rigorosamente o fluxo de branches atômicas e merges sem fast-fo
 ```text
 main (estável / produção)
   ▲
-  └── feature/CORE-10-hardware-bot
-        ├── task/CORE-01-backend-inventory-and-tests
-        ├── task/CORE-02-ai-gemini-tool-calling
-        ├── task/CORE-03-fastapi-chat-endpoint
-        ├── task/CORE-04-frontend-chat-ui
-        └── task/CORE-05-readme-documentation
+  ├── feature/CORE-10-hardware-bot (Fundação e Entrega PRD)
+  └── feature/CORE-20-grok-and-hardware-dashboards (Grok & Dashboards)
+        ├── task/CORE-21-backend-grok-and-comparison-benchmarks
+        ├── task/CORE-22-frontend-hardware-mini-dashboards
+        └── task/CORE-23-docs-and-final-validation
 ```
