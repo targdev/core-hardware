@@ -1,9 +1,10 @@
 """Serviço de Inteligência Artificial integrado ao Grok (xAI) e Google Gemini com Tool Calling.
 
-Configura ferramentas de consulta de estoque, benchmarks pré-montados,
-system prompt oficial da CORE Hardware e fallback determinístico inteligente.
+Prioriza execução via LLMs (Grok e Gemini) com Tool Calling real e dispõe
+de Fallback Conversacional com tolerância a erros ortográficos (Fuzzy Matching).
 """
 
+import difflib
 import json
 import logging
 import os
@@ -15,6 +16,7 @@ from dotenv import load_dotenv
 
 from app.benchmarks import obter_dashboard_benchmarks
 from app.inventory import (
+    CATALOGO_PRODUTOS,
     consultar_estoque,
     listar_produtos,
 )
@@ -29,9 +31,9 @@ Suas diretrizes fundamentais:
 2. SEMPRE consulte as ferramentas disponíveis (`consultar_estoque` ou `listar_produtos`) antes de responder a qualquer pergunta sobre produtos, disponibilidade ou preços.
 3. Se o produto estiver com estoque zerado (como o Lenovo Legion Pro 5), informe educadamente que ele está esgotado (0 unidades em estoque) e mencione o preço de referência.
 4. Ao comparar hardwares (ex: MacBook Air M3 vs Dell XPS 13 vs Lenovo Legion Pro 5), forneça uma análise técnica precisa destacando pontos fortes (CPU, GPU, bateria, tela e perfil de uso).
-5. Mantenha um tom profissional, moderno, tecnológico e prestativo.
+5. Mantenha um tom profissional, moderno, acolhedor, prestativo e conversacional.
 6. Formate os preços em Reais (R$).
-7. Responda de forma direta, elegante e concisa.
+7. Entenda erros de digitação e termos informais do cliente com naturalidade.
 """
 
 TOOL_MAP = {
@@ -39,68 +41,125 @@ TOOL_MAP = {
     "listar_produtos": listar_produtos,
 }
 
-# Definição das ferramentas no padrão OpenAI / xAI Function Calling
 GROK_TOOLS_SCHEMA = [
     {
         "type": "function",
         "function": {
-          "name": "consultar_estoque",
-          "description": "Consulta o estoque, quantidade em unidades, preço e especificações de um produto por nome, ID ou termo.",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "nome_ou_termo": {
-                "type": "string",
-                "description": "Nome ou modelo do produto de hardware (ex: MacBook, XPS, Legion, MX Master, Keychron, RTX 4060 Ti, Dell 4K)"
-              }
+            "name": "consultar_estoque",
+            "description": "Consulta o estoque, quantidade em unidades, preço e especificações de um produto por nome, ID ou termo.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "nome_ou_termo": {
+                        "type": "string",
+                        "description": "Nome ou modelo do produto de hardware (ex: MacBook, XPS, Legion, MX Master, Keychron, RTX 4060 Ti, Dell 4K)",
+                    }
+                },
+                "required": ["nome_ou_termo"],
             },
-            "required": ["nome_ou_termo"]
-          }
-        }
+        },
     },
     {
         "type": "function",
         "function": {
-          "name": "listar_produtos",
-          "description": "Lista produtos disponíveis no catálogo oficial da CORE Hardware, opcionalmente filtrando por categoria.",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "categoria": {
-                "type": "string",
-                "description": "Categoria desejada (Notebooks, Periféricos, Monitores, Hardware) ou None para catálogo completo"
-              }
-            }
-          }
-        }
-    }
+            "name": "listar_produtos",
+            "description": "Lista produtos disponíveis no catálogo oficial da CORE Hardware, opcionalmente filtrando por categoria.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "categoria": {
+                        "type": "string",
+                        "description": "Categoria desejada (Notebooks, Periféricos, Monitores, Hardware) ou None para catálogo completo",
+                    }
+                },
+            },
+        },
+    },
 ]
+
+# Mapa de palavras-chave canônicas e sinônimos com tolerância a erros de digitação
+DICIONARIO_TERMOS_PRODUTOS = {
+    "mouse": ("PERIF-01", "Mouse Logitech MX Master 3S"),
+    "moude": ("PERIF-01", "Mouse Logitech MX Master 3S"),
+    "mause": ("PERIF-01", "Mouse Logitech MX Master 3S"),
+    "logitech": ("PERIF-01", "Mouse Logitech MX Master 3S"),
+    "mx master": ("PERIF-01", "Mouse Logitech MX Master 3S"),
+    "master 3s": ("PERIF-01", "Mouse Logitech MX Master 3S"),
+    "teclado": ("PERIF-02", "Teclado Keychron K2 Pro"),
+    "teclao": ("PERIF-02", "Teclado Keychron K2 Pro"),
+    "keychron": ("PERIF-02", "Teclado Keychron K2 Pro"),
+    "k2 pro": ("PERIF-02", "Teclado Keychron K2 Pro"),
+    "macbook": ("NOTE-01", "MacBook Air 15\" M3"),
+    "macbok": ("NOTE-01", "MacBook Air 15\" M3"),
+    "apple": ("NOTE-01", "MacBook Air 15\" M3"),
+    "air m3": ("NOTE-01", "MacBook Air 15\" M3"),
+    "m3": ("NOTE-01", "MacBook Air 15\" M3"),
+    "dell xps": ("NOTE-02", "Dell XPS 13 Plus"),
+    "xps": ("NOTE-02", "Dell XPS 13 Plus"),
+    "xps 13": ("NOTE-02", "Dell XPS 13 Plus"),
+    "legion": ("NOTE-03", "Lenovo Legion Pro 5"),
+    "lenovo": ("NOTE-03", "Lenovo Legion Pro 5"),
+    "legion pro": ("NOTE-03", "Lenovo Legion Pro 5"),
+    "monitor": ("MON-01", "Monitor Dell UltraSharp 27\" 4K"),
+    "monitr": ("MON-01", "Monitor Dell UltraSharp 27\" 4K"),
+    "ultrasharp": ("MON-01", "Monitor Dell UltraSharp 27\" 4K"),
+    "tela": ("MON-01", "Monitor Dell UltraSharp 27\" 4K"),
+    "4k": ("MON-01", "Monitor Dell UltraSharp 27\" 4K"),
+    "rtx": ("GPU-01", "Nvidia GeForce RTX 4060 Ti 8GB"),
+    "4060": ("GPU-01", "Nvidia GeForce RTX 4060 Ti 8GB"),
+    "geforce": ("GPU-01", "Nvidia GeForce RTX 4060 Ti 8GB"),
+    "placa de video": ("GPU-01", "Nvidia GeForce RTX 4060 Ti 8GB"),
+    "placa de vídeo": ("GPU-01", "Nvidia GeForce RTX 4060 Ti 8GB"),
+    "gpu": ("GPU-01", "Nvidia GeForce RTX 4060 Ti 8GB"),
+}
+
+
+def _encontrar_produto_aproximado(mensagem: str) -> Optional[Tuple[str, str]]:
+    """Identifica o produto pretendido pelo usuário mesmo com erros de digitação (fuzzy matching)."""
+    msg_limpa = mensagem.lower()
+
+    # 1. Match direto em chaves compostas
+    for chave, item in DICIONARIO_TERMOS_PRODUTOS.items():
+        if chave in msg_limpa:
+            return item
+
+    # 2. Match de palavras com Fuzzy Matching (difflib)
+    palavras = re.findall(r"\b[a-zA-Z0-9áéíóúâêîôûãõç]{3,}\b", msg_limpa)
+    chaves_disponiveis = list(DICIONARIO_TERMOS_PRODUTOS.keys())
+
+    for palavra in palavras:
+        matches = difflib.get_close_matches(palavra, chaves_disponiveis, n=1, cutoff=0.72)
+        if matches:
+            chave_encontrada = matches[0]
+            return DICIONARIO_TERMOS_PRODUTOS[chave_encontrada]
+
+    return None
 
 
 def _executar_fallback_deterministico(
     message: str, history: Optional[List[Dict[str, str]]] = None
 ) -> Tuple[str, List[str], Optional[Dict[str, Any]]]:
-    """Fallback inteligente para responder com precisão técnica a perguntas sobre estoque e comparativos."""
+    """Fallback conversacional empático e resiliente para quando nenhuma API estiver com chave configurada."""
     msg_lower = message.lower().strip()
     tools_called: List[str] = []
 
     # Verificar se a mensagem ativa um mini dashboard de comparação pré-montado
     dashboard = obter_dashboard_benchmarks(message)
 
-    # 1. Caso de Comparação de Notebooks
+    # 1. Comparativo de Notebooks
     if dashboard and dashboard.get("tipo") == "comparativo_notebooks":
         tools_called.extend(["consultar_estoque", "listar_produtos"])
         reply = (
             "📊 **Mini Dashboard Comparativo: Linha de Notebooks CORE Hardware**\n\n"
             "Preparamos um comparativo técnico detalhado dos três principais modelos do nosso catálogo:\n\n"
             "1. **MacBook Air 15\" M3 (R$ 11.999,00 - 4 un. em estoque)**\n"
-            "   • *Destaque:* Chip M3, eficiência extrema, design silencioso sem ventoinhas (fanless).\n"
-            "   • *Autonomia:* Até 18 horas de bateria contínua.\n"
-            "   • *Perfil:* Mobilidade máxima, programação, edição ágil e produtividade executiva.\n\n"
+            "   • **Destaque:** Chip M3, eficiência extrema, design silencioso sem ventoinhas (fanless).\n"
+            "   • **Autonomia:** Até 18 horas de bateria contínua.\n"
+            "   • **Perfil:** Mobilidade máxima, programação, edição ágil e produtividade executiva.\n\n"
             "2. **Dell XPS 13 Plus (R$ 10.850,00 - 2 un. em estoque)**\n"
-            "   • *Destaque:* Incrível tela 3.5K OLED touchscreen, Intel i7 13ª Ger e 32GB RAM.\n"
-            "   • *Design:* Chassi futurista de alumínio usinado e touchpad háptico contínuo.\n"
-            "   • *Perfil:* Profissionais que exigem a melhor qualidade de display do mercado.\n\n"
+            "   • **Destaque:** Incrível tela 3.5K OLED touchscreen, Intel i7 13ª Ger e 32GB RAM.\n"
+            "   • **Design:** Chassi futurista de alumínio usinado e touchpad háptico contínuo.\n"
+            "   • **Perfil:** Profissionais que exigem a melhor qualidade de display do mercado.\n\n"
             "3. **Lenovo Legion Pro 5 (R$ 9.400,00 - Esgotado)**\n"
             "   • **Destaque:** Máximo poder de processamento com Ryzen 7 7745HX + GPU RTX 4070 8GB.\n"
             "   • **Desempenho:** Taxas acima de 90-120 FPS em 1440p e renderização pesada.\n"
@@ -109,7 +168,7 @@ def _executar_fallback_deterministico(
         )
         return reply, tools_called, dashboard
 
-    # 2. Caso de Benchmark da GPU RTX 4060 Ti
+    # 2. Benchmark da GPU RTX 4060 Ti
     if dashboard and dashboard.get("tipo") == "benchmark_gpu":
         tools_called.append("consultar_estoque")
         reply = (
@@ -125,7 +184,7 @@ def _executar_fallback_deterministico(
         )
         return reply, tools_called, dashboard
 
-    # 3. Caso de Comparação de Periféricos (MX Master 3S vs Keychron K2 Pro)
+    # 3. Setup de Periféricos
     if dashboard and dashboard.get("tipo") == "comparativo_perifericos":
         tools_called.append("consultar_estoque")
         reply = (
@@ -142,7 +201,7 @@ def _executar_fallback_deterministico(
         )
         return reply, tools_called, dashboard
 
-    # 4. Caso de Análise do Monitor Dell UltraSharp 4K
+    # 4. Monitor Dell UltraSharp 4K
     if dashboard and dashboard.get("tipo") == "analise_monitor":
         tools_called.append("consultar_estoque")
         reply = (
@@ -155,25 +214,25 @@ def _executar_fallback_deterministico(
         )
         return reply, tools_called, dashboard
 
-    # Detectar saudações puras
-    saudacoes = ["ola", "olá", "oi", "bom dia", "boa tarde", "boa noite", "hey", "hello"]
+    # 5. Saudações puras
+    saudacoes = ["ola", "olá", "oi", "bom dia", "boa tarde", "boa noite", "hey", "hello", "opa"]
     if msg_lower in saudacoes or any(msg_lower.startswith(s) and len(msg_lower) <= len(s) + 4 for s in saudacoes):
         return (
-            "Olá! Seja bem-vindo à CORE Hardware. Sou o assistente virtual especializado em hardware e periféricos de alta performance. "
-            "Como posso ajudar você hoje com notebooks, periféricos, monitores ou placas de vídeo?",
+            "Olá! Seja muito bem-vindo à **CORE Hardware**. Sou o assistente oficial especializado em hardware e equipamentos de alto desempenho.\n\n"
+            "Como posso ajudar você hoje? Posso consultar nosso estoque em tempo real, informar especificações ou gerar comparativos de notebooks, periféricos, monitores 4K e GPUs!",
             [],
             None,
         )
 
-    # Detectar intenção de listar catálogo completo
+    # 6. Catálogo Geral
     intencoes_catalogo = [
         "quais produtos", "o que voces tem", "o que vocês têm", "listar produtos",
-        "catalogo", "catálogo", "tudo que tem", "lista de produtos", "mostrar produtos"
+        "catalogo", "catálogo", "tudo que tem", "lista de produtos", "mostrar produtos", "ver catalogo"
     ]
     if any(frase in msg_lower for frase in intencoes_catalogo):
         tools_called.append("listar_produtos")
         todos = listar_produtos()
-        linhas = ["Aqui está o nosso catálogo oficial da CORE Hardware:\n"]
+        linhas = ["Aqui está o nosso catálogo oficial da **CORE Hardware**:\n"]
         for p in todos:
             status_txt = "Disponível" if p["estoque"] > 0 else "Esgotado"
             linhas.append(
@@ -181,40 +240,12 @@ def _executar_fallback_deterministico(
             )
         return "\n".join(linhas), tools_called, None
 
-    # Mapeamento de termos para produtos específicos
-    produtos_chave = [
-        ("macbook", "MacBook"),
-        ("air m3", "MacBook"),
-        ("m3", "MacBook"),
-        ("dell xps", "Dell XPS 13 Plus"),
-        ("xps 13", "Dell XPS 13 Plus"),
-        ("xps", "Dell XPS 13 Plus"),
-        ("legion", "Lenovo Legion Pro 5"),
-        ("lenovo", "Lenovo Legion Pro 5"),
-        ("mx master", "Mouse Logitech MX Master 3S"),
-        ("logitech", "Mouse Logitech MX Master 3S"),
-        ("mouse", "Mouse Logitech MX Master 3S"),
-        ("keychron", "Teclado Keychron K2 Pro"),
-        ("teclado", "Teclado Keychron K2 Pro"),
-        ("ultrasharp", "Monitor Dell UltraSharp 27\" 4K"),
-        ("monitor", "Monitor Dell UltraSharp 27\" 4K"),
-        ("rtx", "Nvidia GeForce RTX 4060 Ti 8GB"),
-        ("4060", "Nvidia GeForce RTX 4060 Ti 8GB"),
-        ("geforce", "Nvidia GeForce RTX 4060 Ti 8GB"),
-        ("placa de video", "Nvidia GeForce RTX 4060 Ti 8GB"),
-        ("placa de vídeo", "Nvidia GeForce RTX 4060 Ti 8GB"),
-        ("gpu", "Nvidia GeForce RTX 4060 Ti 8GB"),
-    ]
-
-    termo_busca = None
-    for chave, termo in produtos_chave:
-        if chave in msg_lower:
-            termo_busca = termo
-            break
-
-    if termo_busca:
+    # 7. Busca Inteligente por Produto (com Fuzzy Matching / tolerância a typos)
+    item_aproximado = _encontrar_produto_aproximado(message)
+    if item_aproximado:
+        item_id, termo_busca = item_aproximado
         tools_called.append("consultar_estoque")
-        resultado = consultar_estoque(termo_busca)
+        resultado = consultar_estoque(item_id)
         if resultado.get("encontrado"):
             nome = resultado["nome"]
             estoque = resultado["estoque"]
@@ -223,43 +254,67 @@ def _executar_fallback_deterministico(
 
             if estoque == 0:
                 reply = (
-                    f"O produto **{nome}** ({specs}) está atualmente **esgotado** em nosso estoque "
-                    f"(0 unidades disponíveis). O preço de referência é R$ {preco:,.2f}. "
-                    "Podemos registrar seu interesse para quando recebermos nova remessa!"
+                    f"O notebook **{nome}** ({specs}) está atualmente **esgotado** em nosso estoque (0 unidades disponíveis). "
+                    f"O preço oficial de tabela é **R$ {preco:,.2f}**.\n\n"
+                    "Deseja que registremos seu interesse ou gostaria de conhecer o **MacBook Air M3** ou o **Dell XPS 13 Plus** como opções disponíveis?"
                 )
             else:
                 reply = (
-                    f"Sim! Temos o **{nome}** ({specs}) disponível. "
-                    f"Atualmente temos **{estoque} unidades** em estoque pelo valor de R$ {preco:,.2f} cada."
+                    f"Com certeza! Temos o **{nome}** ({specs}) disponível em nosso estoque.\n\n"
+                    f"• **Quantidade disponível:** {estoque} unidades\n"
+                    f"• **Preço unitário:** R$ {preco:,.2f}\n\n"
+                    "Gostaria de tirar alguma dúvida sobre as especificações técnicas ou ver um comparativo?"
                 )
             return reply, tools_called, dashboard
 
-    # Fallback genérico para itens não encontrados
+    # 8. Resposta conversacional natural quando o item não for identificado
     tools_called.append("consultar_estoque")
     return (
-        "Desculpe, não encontrei esse item em nosso catálogo da CORE Hardware. "
-        "Nosso catálogo inclui notebooks de alta performance (MacBook M3, Dell XPS, Lenovo Legion), "
-        "periféricos premium (Logitech MX Master 3S, Keychron K2 Pro), Monitores 4K e GPUs RTX. "
-        "Gostaria de consultar algum desses ou ver um comparativo de desempenho?",
+        "Entendi sua dúvida! Não localizei exatamente esse modelo específico em nosso catálogo, mas na **CORE Hardware** trabalhamos com os seguintes equipamentos selecionados:\n\n"
+        "• **Notebooks:** MacBook Air 15\" M3, Dell XPS 13 Plus e Lenovo Legion Pro 5\n"
+        "• **Periféricos:** Mouse Logitech MX Master 3S e Teclado Mecânico Keychron K2 Pro\n"
+        "• **Monitores:** Dell UltraSharp 27\" 4K IPS Black com Hub USB-C de 90W\n"
+        "• **Hardware:** Placa de Vídeo Nvidia GeForce RTX 4060 Ti 8GB\n\n"
+        "Gostaria de consultar disponibilidade, valores ou ver um comparativo de algum desses itens?",
         tools_called,
         None,
     )
 
 
 class AIService:
-    """Serviço unificado de atendimento com suporte ao Grok (xAI) e Gemini com Tool Calling."""
+    """Serviço unificado de atendimento que prioriza Grok (xAI) e Gemini com fallback conversacional."""
 
     def __init__(self):
-        self.grok_api_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+        self._carregar_configuracoes()
+
+    def _carregar_configuracoes(self):
+        """Recarrega as variáveis de ambiente dinamicamente."""
+        load_dotenv(override=True)
+        self.grok_api_key = (
+            os.getenv("XAI_API_KEY")
+            or os.getenv("GROK_API_KEY")
+        )
+        self.gemini_api_key = (
+            os.getenv("GEMINI_API_KEY")
+            or os.getenv("GOOGLE_API_KEY")
+        )
         self.grok_model = os.getenv("GROK_MODEL", "grok-2-latest")
         self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
+    def _tem_chave_valida(self, chave: Optional[str]) -> bool:
+        """Verifica se uma chave de API é válida e não é placeholder."""
+        if not chave:
+            return False
+        chave_clean = chave.strip()
+        if not chave_clean or chave_clean.startswith("sua_chave") or "placeholder" in chave_clean.lower():
+            return False
+        return len(chave_clean) > 8
 
     def _processar_via_grok(
         self, message: str, history: Optional[List[Dict[str, str]]] = None
     ) -> Optional[Tuple[str, List[str]]]:
         """Executa a conversação via Grok (xAI API) com Function/Tool Calling."""
-        if not self.grok_api_key or not self.grok_api_key.strip() or self.grok_api_key.startswith("sua_chave"):
+        if not self._tem_chave_valida(self.grok_api_key):
             return None
 
         tools_called: List[str] = []
@@ -293,7 +348,6 @@ class AIService:
             choice = data["choices"][0]
             msg_obj = choice["message"]
 
-            # Verificar se o Grok solicitou tool_calls
             tool_calls = msg_obj.get("tool_calls")
             if tool_calls:
                 messages.append(msg_obj)
@@ -307,10 +361,7 @@ class AIService:
 
                     tools_called.append(fn_name)
                     fn = TOOL_MAP.get(fn_name)
-                    if fn:
-                        res = fn(**args)
-                    else:
-                        res = {"erro": f"Ferramenta '{fn_name}' não existe"}
+                    res = fn(**args) if fn else {"erro": f"Ferramenta '{fn_name}' não existe"}
 
                     messages.append({
                         "role": "tool",
@@ -318,7 +369,6 @@ class AIService:
                         "content": json.dumps(res, ensure_ascii=False),
                     })
 
-                # Segunda chamada para gerar a resposta final
                 payload["messages"] = messages
                 resp2 = client.post("https://api.x.ai/v1/chat/completions", headers=headers, json=payload)
                 if resp2.status_code == 200:
@@ -332,7 +382,7 @@ class AIService:
         self, message: str, history: Optional[List[Dict[str, str]]] = None
     ) -> Optional[Tuple[str, List[str]]]:
         """Executa a conversação via Google GenAI com Tool Calling."""
-        if not self.gemini_api_key or not self.gemini_api_key.strip() or self.gemini_api_key.startswith("sua_chave"):
+        if not self._tem_chave_valida(self.gemini_api_key):
             return None
 
         try:
@@ -390,9 +440,9 @@ class AIService:
                     contents=contents,
                     config=config,
                 )
-                return final_response.text or "Consulta realizada.", tools_called
+                return final_response.text or "Consulta realizada com sucesso.", tools_called
 
-            return response.text or "Olá! Como posso ajudar?", tools_called
+            return response.text or "Olá! Como posso ajudar com nossos produtos?", tools_called
 
         except Exception as e:
             logger.warning("Falha ao consultar Gemini API: %s", e)
@@ -404,43 +454,44 @@ class AIService:
         history: Optional[List[Dict[str, str]]] = None,
         provider: Optional[str] = "auto",
     ) -> Dict[str, Any]:
-        """Processa a mensagem priorizando o provedor selecionado (Grok, Gemini ou Fallback Inteligente)."""
+        """Prioriza estritamente os modelos de IA (Grok e Gemini) antes de qualquer fallback."""
+        # Recarregar chaves de ambiente caso o usuário tenha editado o .env
+        self._carregar_configuracoes()
+
         dashboard_data = obter_dashboard_benchmarks(message)
         provedor_preferido = (provider or os.getenv("LLM_PROVIDER", "auto")).lower()
 
-        # 1. Tentativa via Grok (xAI)
-        if provedor_preferido in ("grok", "xai", "auto"):
-            if self.grok_api_key and not self.grok_api_key.startswith("sua_chave"):
-                try:
-                    res_grok = self._processar_via_grok(message, history)
-                    if res_grok:
-                        reply, tools = res_grok
-                        return {
-                            "reply": reply,
-                            "tools_called": tools,
-                            "dashboard_data": dashboard_data,
-                            "provider": "grok",
-                        }
-                except Exception as e:
-                    logger.warning("Erro no processamento Grok: %s", e)
+        # 1. Prioridade 1: Grok (xAI) se solicitado ou se estiver com chave disponível no modo auto
+        if provedor_preferido in ("grok", "xai") or (provedor_preferido == "auto" and self._tem_chave_valida(self.grok_api_key)):
+            try:
+                res_grok = self._processar_via_grok(message, history)
+                if res_grok:
+                    reply, tools = res_grok
+                    return {
+                        "reply": reply,
+                        "tools_called": tools,
+                        "dashboard_data": dashboard_data,
+                        "provider": "grok",
+                    }
+            except Exception as e:
+                logger.warning("Erro ao tentar Grok como IA principal: %s", e)
 
-        # 2. Tentativa via Gemini
-        if provedor_preferido in ("gemini", "google", "auto"):
-            if self.gemini_api_key and not self.gemini_api_key.startswith("sua_chave"):
-                try:
-                    res_gemini = self._processar_via_gemini(message, history)
-                    if res_gemini:
-                        reply, tools = res_gemini
-                        return {
-                            "reply": reply,
-                            "tools_called": tools,
-                            "dashboard_data": dashboard_data,
-                            "provider": "gemini",
-                        }
-                except Exception as e:
-                    logger.warning("Erro no processamento Gemini: %s", e)
+        # 2. Prioridade 2: Google Gemini se solicitado ou se estiver com chave disponível no modo auto
+        if provedor_preferido in ("gemini", "google") or (provedor_preferido == "auto" and self._tem_chave_valida(self.gemini_api_key)):
+            try:
+                res_gemini = self._processar_via_gemini(message, history)
+                if res_gemini:
+                    reply, tools = res_gemini
+                    return {
+                        "reply": reply,
+                        "tools_called": tools,
+                        "dashboard_data": dashboard_data,
+                        "provider": "gemini",
+                    }
+            except Exception as e:
+                logger.warning("Erro ao tentar Gemini como IA principal: %s", e)
 
-        # 3. Fallback Determinístico Inteligente (Resiliência Total)
+        # 3. Fallback inteligente de contingência (ativo somente se nenhuma IA responder ou estiver sem chaves)
         reply, tools, dash = _executar_fallback_deterministico(message, history)
         final_dashboard = dashboard_data or dash
         return {
