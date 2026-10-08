@@ -172,5 +172,7 @@ main (estável / produção)
         ├── task/CORE-23-docs-and-final-validation
         ├── task/CORE-24-fix-markdown-rendering
         ├── task/CORE-25-clean-ui-remove-technical-tools
-        └── task/CORE-26-enrich-readme-instructions
+        ├── task/CORE-26-enrich-readme-instructions
+        ├── task/CORE-27-ai-priority-and-fuzzy-intelligence
+        └── task/CORE-28-localstorage-memory-and-procedural-dialog
 ```
