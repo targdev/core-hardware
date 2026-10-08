@@ -9,7 +9,7 @@ O assistente integra as IAs **Grok (xAI)** e **Google Gemini** com **Tool / Func
 ## 🛠️ Stack Tecnológica
 
 - **Backend:** Python 3.10+, FastAPI, Uvicorn, Pydantic v2, Google GenAI SDK (`google-genai`), Pytest, HTTPX, python-dotenv.
-- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons (Design Dark Zinc / Titanium Hardware moderno com seletor de IA e badges de Tool Calling).
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons, React Markdown (Design Dark Zinc / Titanium Hardware moderno com seletor de IA).
 - **Inteligência Artificial:** 
   - **Grok (xAI):** Suporte nativo via `grok-2-latest` com Function Calling via OpenAI/xAI API schema.
   - **Google Gemini:** `gemini-2.5-flash` com Function Calling declarativo.
@@ -44,11 +44,11 @@ O assistente integra as IAs **Grok (xAI)** e **Google Gemini** com **Tool / Func
 
 ---
 
-## 🚀 Como Executar o Projeto
+## 🚀 Como Executar o Projeto Localmente
 
 ### 1. Backend & Testes (Python FastAPI)
 
-1. Entre no diretório do backend:
+1. Abra um terminal e entre no diretório do backend:
    ```bash
    cd backend
    ```
@@ -56,17 +56,25 @@ O assistente integra as IAs **Grok (xAI)** e **Google Gemini** com **Tool / Func
 2. Instale as dependências:
    ```bash
    pip install -r requirements.txt
+   # No Windows, caso prefira:
+   # python -m pip install -r requirements.txt
    ```
 
 3. Configure as variáveis de ambiente (Opcional):
    ```bash
+   # Linux / macOS
    cp .env.example .env
+
+   # Windows (PowerShell)
+   Copy-Item .env.example .env
    ```
-   > **Nota de Resiliência:** Caso não informe `XAI_API_KEY` ou `GEMINI_API_KEY`, o sistema ativará automaticamente o **Fallback Determinístico Inteligente**, permitindo testar todas as consultas de estoque, comparativos e mini dashboards sem interrupções.
+   > **Nota de Resiliência:** Caso não configure chaves de API (`XAI_API_KEY` ou `GEMINI_API_KEY`), o sistema ativa automaticamente o **Fallback Determinístico Inteligente**, permitindo testar e avaliar 100% das consultas de estoque, comparativos e telemetria sem interrupções.
 
 4. Execute a suíte de testes unitários e de integração:
    ```bash
    pytest
+   # Ou explicitamente:
+   # python -m pytest tests/ -v
    ```
 
 5. Inicie o servidor da API:
@@ -79,7 +87,7 @@ O assistente integra as IAs **Grok (xAI)** e **Google Gemini** com **Tool / Func
 
 ### 2. Frontend (React + TypeScript + Vite)
 
-1. Em um novo terminal, entre no diretório do frontend:
+1. Em um segundo terminal, entre no diretório do frontend:
    ```bash
    cd frontend
    ```
@@ -87,20 +95,42 @@ O assistente integra as IAs **Grok (xAI)** e **Google Gemini** com **Tool / Func
 2. Instale as dependências:
    ```bash
    npm install
+   # No Windows (PowerShell com restrição de script):
+   # npm.cmd install
    ```
 
 3. Inicie o servidor de desenvolvimento:
    ```bash
    npm run dev
+   # No Windows:
+   # npm.cmd run dev
    ```
 
-4. Abra a aplicação no navegador em `http://localhost:3000` (ou endereço indicado no terminal).
+4. Abra a aplicação no navegador em **[http://localhost:3000](http://localhost:3000)**.
+
+---
+
+### 3. Teste Rápido via Terminal (cURL / HTTP)
+
+Você também pode consultar o endpoint diretamente via linha de comando com a API em execução:
+
+```bash
+# Teste de consulta de estoque (MacBook Air M3)
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Vocês têm o MacBook Air M3? Tem quantos?"}'
+
+# Teste de produto esgotado (Lenovo Legion Pro 5)
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Tem o Lenovo Legion Pro 5 em estoque?"}'
+```
 
 ---
 
 ## 🧪 Suíte de Testes Automatizados
 
-A aplicação possui 3 arquivos de testes cobrindo todos os requisitos funcionais:
+A aplicação possui 3 suítes de testes cobrindo 100% dos requisitos funcionais e não-funcionais:
 
 1. **`backend/tests/test_inventory.py`:**
    - **Cenário A:** Busca por produto existente (ex: "MacBook", "MX Master 3S") retornando disponibilidade e estoque > 0.
@@ -110,7 +140,7 @@ A aplicação possui 3 arquivos de testes cobrindo todos os requisitos funcionai
 
 2. **`backend/tests/test_chat_api.py`:**
    - Teste de integração HTTP com `fastapi.testclient.TestClient`.
-   - Mock da chamada externa do LLM para execução rápida em CI/CD.
+   - Mock da chamada externa do LLM para execução rápida e isolada em CI/CD.
    - Verificação de payload de entrada e saída (`reply` e `tools_called`).
    - Rejeição de requisições inválidas com `422 Unprocessable Entity`.
    - Endpoint de verificação de integridade (`/api/health`).
@@ -130,9 +160,17 @@ O projeto segue rigorosamente o fluxo de branches atômicas e merges sem fast-fo
 ```text
 main (estável / produção)
   ▲
-  ├── feature/CORE-10-hardware-bot (Fundação e Entrega PRD)
+  ├── feature/CORE-10-hardware-bot (Fundação e Requisitos PRD)
+  │     ├── task/CORE-01-backend-inventory-and-tests
+  │     ├── task/CORE-02-ai-gemini-tool-calling
+  │     ├── task/CORE-03-fastapi-chat-endpoint
+  │     ├── task/CORE-04-frontend-chat-ui
+  │     └── task/CORE-05-readme-documentation
   └── feature/CORE-20-grok-and-hardware-dashboards (Grok & Dashboards)
         ├── task/CORE-21-backend-grok-and-comparison-benchmarks
         ├── task/CORE-22-frontend-hardware-mini-dashboards
-        └── task/CORE-23-docs-and-final-validation
+        ├── task/CORE-23-docs-and-final-validation
+        ├── task/CORE-24-fix-markdown-rendering
+        ├── task/CORE-25-clean-ui-remove-technical-tools
+        └── task/CORE-26-enrich-readme-instructions
 ```
