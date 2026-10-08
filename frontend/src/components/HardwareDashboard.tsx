@@ -7,6 +7,7 @@ import {
   Sparkles,
   BarChart3
 } from 'lucide-react';
+import Markdown from 'react-markdown';
 
 export interface ComparedProduct {
   id: string;
@@ -353,14 +354,34 @@ export const HardwareDashboard: React.FC<HardwareDashboardProps> = ({ data }) =>
         </div>
       )}
 
-      {/* Veredito Técnico em Destaque */}
+      {/* Veredito e Recomendação em Destaque */}
       {data.veredito && (
         <div className="mt-4 rounded-xl border border-cyan-900/40 bg-gradient-to-r from-cyan-950/40 via-zinc-900/60 to-blue-950/30 p-3 sm:p-3.5 text-xs text-zinc-300">
-          <div className="flex items-center gap-1.5 text-cyan-400 font-bold mb-1 uppercase tracking-wider text-[11px]">
-            <Sparkles className="h-3.5 w-3.5" /> Veredito de Engenharia CORE Hardware
+          <div className="flex items-center gap-1.5 text-cyan-400 font-bold mb-2 uppercase tracking-wider text-[11px]">
+            <Sparkles className="h-3.5 w-3.5" /> Recomendação Especialista CORE Hardware
           </div>
-          <div className="leading-relaxed text-zinc-300 whitespace-pre-line pl-5">
-            {data.veredito}
+          <div className="pl-1 text-zinc-200">
+            <Markdown
+              components={{
+                strong: ({ ...props }) => (
+                  <strong className="text-cyan-200 font-semibold" {...props} />
+                ),
+                p: ({ ...props }) => (
+                  <p className="leading-relaxed mb-1.5 last:mb-0" {...props} />
+                ),
+                ul: ({ ...props }) => (
+                  <ul className="space-y-1.5 my-1" {...props} />
+                ),
+                li: ({ children, ...props }) => (
+                  <li className="flex items-start gap-2 leading-relaxed" {...props}>
+                    <span className="text-cyan-400 font-bold select-none">•</span>
+                    <span className="flex-1">{children}</span>
+                  </li>
+                ),
+              }}
+            >
+              {data.veredito}
+            </Markdown>
           </div>
         </div>
       )}

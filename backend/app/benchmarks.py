@@ -179,9 +179,9 @@ def gerar_dashboard_comparativo_notebooks() -> Dict[str, Any]:
         ],
         "produtos": produtos_comparados,
         "veredito": (
-            "• **MacBook Air M3**: Vencedor absoluto para mobilidade, autonomia e trabalho sem ruído.\n"
-            "• **Dell XPS 13 Plus**: Melhor fidelidade visual para quem exige tela OLED 3.5K e peso pluma.\n"
-            "• **Lenovo Legion Pro 5**: Campeão em poder bruto e FPS para jogos e IA (atualmente esgotado)."
+            "- **MacBook Air M3**: Vencedor absoluto para mobilidade, autonomia e trabalho sem ruído.\n"
+            "- **Dell XPS 13 Plus**: Melhor fidelidade visual para quem exige tela OLED 3.5K e peso pluma.\n"
+            "- **Lenovo Legion Pro 5**: Campeão em poder bruto e FPS para jogos e IA (atualmente esgotado)."
         ),
     }
 
