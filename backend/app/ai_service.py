@@ -102,10 +102,10 @@ def _executar_fallback_deterministico(
             "   • *Design:* Chassi futurista de alumínio usinado e touchpad háptico contínuo.\n"
             "   • *Perfil:* Profissionais que exigem a melhor qualidade de display do mercado.\n\n"
             "3. **Lenovo Legion Pro 5 (R$ 9.400,00 - Esgotado)**\n"
-            "   • *Destaque:* Máximo poder de processamento com Ryzen 7 7745HX + GPU RTX 4070 8GB.\n"
-            "   • *Desempenho:* Taxas acima de 90-120 FPS em 1440p e renderização pesada.\n"
-            "   • *Status:* Atualmente esgotado em estoque (0 unidades).\n\n"
-            "👉 *Consulte os gráficos interativos de benchmark e telemetria gerados no painel acima!*"
+            "   • **Destaque:** Máximo poder de processamento com Ryzen 7 7745HX + GPU RTX 4070 8GB.\n"
+            "   • **Desempenho:** Taxas acima de 90-120 FPS em 1440p e renderização pesada.\n"
+            "   • **Status:** Atualmente esgotado em estoque (0 unidades).\n\n"
+            "👉 **Consulte os gráficos interativos de benchmark e telemetria gerados no painel acima!**"
         )
         return reply, tools_called, dashboard
 
@@ -116,12 +116,12 @@ def _executar_fallback_deterministico(
             "⚡ **Telemetria & Benchmark: Nvidia GeForce RTX 4060 Ti 8GB**\n\n"
             "Temos **3 unidades disponíveis** em estoque pelo valor de **R$ 2.650,00**.\n\n"
             "• **Desempenho em Jogos (Média aferida):**\n"
-            "  - *Cyberpunk 2077 (1080p Ultra RT + DLSS 3):* 104 FPS\n"
-            "  - *Warzone 2 / MW3 (1440p High):* 115 FPS\n"
-            "  - *Forza Horizon 5 (1440p Maxed):* 98 FPS\n"
+            "  - **Cyberpunk 2077 (1080p Ultra RT + DLSS 3):** 104 FPS\n"
+            "  - **Warzone 2 / MW3 (1440p High):** 115 FPS\n"
+            "  - **Forza Horizon 5 (1440p Maxed):** 98 FPS\n"
             "• **Eficiência Energética:** Consumo controlado de 160W TDP (recomendamos fonte de 550W a 650W).\n"
             "• **Destaque:** Suporte nativo a Ray Tracing e DLSS 3 Frame Generation.\n\n"
-            "👉 *Confira as métricas completas no mini dashboard interativo anexado.*"
+            "👉 **Confira as métricas completas no mini dashboard interativo anexado.**"
         )
         return reply, tools_called, dashboard
 
