@@ -15,6 +15,7 @@ import {
   BotMessageSquare
 } from 'lucide-react';
 import { HardwareDashboard, DashboardData } from './components/HardwareDashboard';
+import Markdown from 'react-markdown';
 
 interface Message {
   id: string;
@@ -187,39 +188,47 @@ export default function App() {
 
   // Renderizador simples de markdown
   const renderFormattedContent = (content: string) => {
-    const lines = content.split('\n');
     return (
-      <div className="space-y-1.5 text-[14.5px] leading-relaxed">
-        {lines.map((line, idx) => {
-          if (!line.trim()) {
-            return <div key={idx} className="h-1.5" />;
-          }
-
-          const isBullet = line.trim().startsWith('-') || line.trim().startsWith('*') || line.trim().startsWith('•');
-          const cleanLine = isBullet ? line.trim().replace(/^[-*•]\s*/, '') : line;
-
-          const parts = cleanLine.split(/(\*\*.*?\*\*)/g);
-
-          return (
-            <span key={idx} className={isBullet ? 'flex items-start gap-2' : 'block'}>
-              {isBullet && (
-                <span className="text-cyan-400 font-bold select-none mt-0.5">•</span>
-              )}
-              <span>
-                {parts.map((part, pIdx) => {
-                  if (part.startsWith('**') && part.endsWith('**')) {
-                    return (
-                      <strong key={pIdx} className="text-cyan-200 font-semibold">
-                        {part.slice(2, -2)}
-                      </strong>
-                    );
-                  }
-                  return <span key={pIdx}>{part}</span>;
-                })}
-              </span>
-            </span>
-          );
-        })}
+      <div className="text-[14.5px] leading-relaxed text-zinc-200">
+        <Markdown
+          components={{
+            strong: ({ ...props }) => (
+              <strong className="text-cyan-200 font-semibold" {...props} />
+            ),
+            em: ({ ...props }) => (
+              <em className="text-zinc-200 font-medium not-italic" {...props} />
+            ),
+            p: ({ ...props }) => (
+              <p className="leading-relaxed mb-2 last:mb-0" {...props} />
+            ),
+            ul: ({ ...props }) => (
+              <ul className="space-y-1.5 my-2 pl-1" {...props} />
+            ),
+            ol: ({ ...props }) => (
+              <ol className="space-y-1.5 my-2 list-decimal pl-5 text-zinc-300" {...props} />
+            ),
+            li: ({ children, ...props }) => (
+              <li className="flex items-start gap-2 leading-relaxed text-zinc-200" {...props}>
+                <span className="text-cyan-400 font-bold select-none mt-1 text-xs">•</span>
+                <span className="flex-1">{children}</span>
+              </li>
+            ),
+            h1: ({ ...props }) => (
+              <h1 className="text-base font-bold text-white mb-2" {...props} />
+            ),
+            h2: ({ ...props }) => (
+              <h2 className="text-sm font-bold text-white mb-1.5" {...props} />
+            ),
+            h3: ({ ...props }) => (
+              <h3 className="text-sm font-semibold text-cyan-300 mb-1" {...props} />
+            ),
+            code: ({ ...props }) => (
+              <code className="bg-zinc-800 text-cyan-300 px-1.5 py-0.5 rounded text-xs font-mono" {...props} />
+            ),
+          }}
+        >
+          {content}
+        </Markdown>
       </div>
     );
   };
