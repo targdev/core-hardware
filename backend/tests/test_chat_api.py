@@ -73,3 +73,73 @@ def test_health_check_endpoint():
     response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json() == {"status": "healthy"}
+
+
+def test_procedural_dialog_follow_up_price():
+    """Valida diálogo procedural: pergunta sobre preço usando pronome 'ele' com histórico."""
+    payload = {
+        "message": "E quanto custa ele?",
+        "history": [
+            {"role": "user", "content": "Vocês têm o MacBook Air M3?"},
+            {"role": "assistant", "content": "Temos sim o MacBook Air 15\" M3 com 4 unidades disponíveis."},
+        ],
+    }
+    response = client.post("/api/chat", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "MacBook Air" in data["reply"]
+    assert "11.999" in data["reply"]
+    assert "consultar_estoque" in data["tools_called"]
+
+
+def test_procedural_dialog_follow_up_color():
+    """Valida diálogo procedural: pergunta sobre cor e acabamento a partir do histórico."""
+    payload = {
+        "message": "Qual a cor dele?",
+        "history": [
+            {"role": "user", "content": "Tem o Dell XPS 13 Plus?"},
+            {"role": "assistant", "content": "Temos 2 unidades do Dell XPS 13 Plus em estoque."},
+        ],
+    }
+    response = client.post("/api/chat", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "Dell XPS 13" in data["reply"]
+    assert "Grafite" in data["reply"] or "Platina" in data["reply"] or "alumínio" in data["reply"].lower()
+    assert "consultar_estoque" in data["tools_called"]
+
+
+def test_procedural_dialog_follow_up_battery():
+    """Valida diálogo procedural: pergunta sobre autonomia de bateria a partir do histórico."""
+    payload = {
+        "message": "E quanto dura a bateria dele?",
+        "history": [
+            {"role": "user", "content": "Me fale sobre o MacBook Air M3"},
+            {"role": "assistant", "content": "O MacBook Air M3 tem chip Apple M3 e 16GB RAM."},
+        ],
+    }
+    response = client.post("/api/chat", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "MacBook Air" in data["reply"]
+    assert "18 horas" in data["reply"]
+    assert "consultar_estoque" in data["tools_called"]
+
+
+def test_procedural_dialog_follow_up_warranty():
+    """Valida diálogo procedural: pergunta sobre garantia oficial a partir do histórico."""
+    payload = {
+        "message": "Tem garantia?",
+        "history": [
+            {"role": "user", "content": "Tem o Teclado Keychron K2 Pro?"},
+            {"role": "assistant", "content": "Sim! O Teclado Keychron K2 Pro custa R$ 780,00."},
+        ],
+    }
+    response = client.post("/api/chat", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "Keychron K2 Pro" in data["reply"]
+    assert "12 meses" in data["reply"]
+    assert "nota fiscal" in data["reply"].lower()
+    assert "consultar_estoque" in data["tools_called"]
+

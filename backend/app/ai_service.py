@@ -34,6 +34,9 @@ Suas diretrizes fundamentais:
 5. Mantenha um tom profissional, moderno, acolhedor, prestativo e conversacional.
 6. Formate os preços em Reais (R$).
 7. Entenda erros de digitação e termos informais do cliente com naturalidade.
+8. CONVERSA PROCEDURAL E MEMÓRIA DE CONTEXTO:
+   - Mantenha continuidade natural do diálogo. Se o cliente fizer perguntas complementares usando pronomes ou elipses (ex: "E quanto custa?", "Qual a cor dele?", "E a bateria?", "Tem garantia?"), recupere o produto em discussão do histórico recente e responda de forma conectada.
+   - Conduza o atendimento de forma consultiva, sugerindo comparações ou acessórios complementares quando for oportuno.
 """
 
 TOOL_MAP = {
@@ -85,32 +88,108 @@ DICIONARIO_TERMOS_PRODUTOS = {
     "logitech": ("PERIF-01", "Mouse Logitech MX Master 3S"),
     "mx master": ("PERIF-01", "Mouse Logitech MX Master 3S"),
     "master 3s": ("PERIF-01", "Mouse Logitech MX Master 3S"),
+    "mx master 3s": ("PERIF-01", "Mouse Logitech MX Master 3S"),
+    "perif-01": ("PERIF-01", "Mouse Logitech MX Master 3S"),
     "teclado": ("PERIF-02", "Teclado Keychron K2 Pro"),
     "teclao": ("PERIF-02", "Teclado Keychron K2 Pro"),
     "keychron": ("PERIF-02", "Teclado Keychron K2 Pro"),
     "k2 pro": ("PERIF-02", "Teclado Keychron K2 Pro"),
+    "keychron k2": ("PERIF-02", "Teclado Keychron K2 Pro"),
+    "perif-02": ("PERIF-02", "Teclado Keychron K2 Pro"),
     "macbook": ("NOTE-01", "MacBook Air 15\" M3"),
     "macbok": ("NOTE-01", "MacBook Air 15\" M3"),
     "apple": ("NOTE-01", "MacBook Air 15\" M3"),
     "air m3": ("NOTE-01", "MacBook Air 15\" M3"),
     "m3": ("NOTE-01", "MacBook Air 15\" M3"),
+    "macbook air": ("NOTE-01", "MacBook Air 15\" M3"),
+    "note-01": ("NOTE-01", "MacBook Air 15\" M3"),
     "dell xps": ("NOTE-02", "Dell XPS 13 Plus"),
     "xps": ("NOTE-02", "Dell XPS 13 Plus"),
     "xps 13": ("NOTE-02", "Dell XPS 13 Plus"),
+    "xps 13 plus": ("NOTE-02", "Dell XPS 13 Plus"),
+    "note-02": ("NOTE-02", "Dell XPS 13 Plus"),
     "legion": ("NOTE-03", "Lenovo Legion Pro 5"),
     "lenovo": ("NOTE-03", "Lenovo Legion Pro 5"),
     "legion pro": ("NOTE-03", "Lenovo Legion Pro 5"),
+    "legion pro 5": ("NOTE-03", "Lenovo Legion Pro 5"),
+    "note-03": ("NOTE-03", "Lenovo Legion Pro 5"),
     "monitor": ("MON-01", "Monitor Dell UltraSharp 27\" 4K"),
     "monitr": ("MON-01", "Monitor Dell UltraSharp 27\" 4K"),
     "ultrasharp": ("MON-01", "Monitor Dell UltraSharp 27\" 4K"),
+    "dell ultrasharp": ("MON-01", "Monitor Dell UltraSharp 27\" 4K"),
     "tela": ("MON-01", "Monitor Dell UltraSharp 27\" 4K"),
     "4k": ("MON-01", "Monitor Dell UltraSharp 27\" 4K"),
+    "u2723qe": ("MON-01", "Monitor Dell UltraSharp 27\" 4K"),
+    "mon-01": ("MON-01", "Monitor Dell UltraSharp 27\" 4K"),
     "rtx": ("GPU-01", "Nvidia GeForce RTX 4060 Ti 8GB"),
     "4060": ("GPU-01", "Nvidia GeForce RTX 4060 Ti 8GB"),
+    "4060 ti": ("GPU-01", "Nvidia GeForce RTX 4060 Ti 8GB"),
+    "rtx 4060": ("GPU-01", "Nvidia GeForce RTX 4060 Ti 8GB"),
     "geforce": ("GPU-01", "Nvidia GeForce RTX 4060 Ti 8GB"),
     "placa de video": ("GPU-01", "Nvidia GeForce RTX 4060 Ti 8GB"),
     "placa de vídeo": ("GPU-01", "Nvidia GeForce RTX 4060 Ti 8GB"),
     "gpu": ("GPU-01", "Nvidia GeForce RTX 4060 Ti 8GB"),
+    "gpu-01": ("GPU-01", "Nvidia GeForce RTX 4060 Ti 8GB"),
+}
+
+# Dados detalhados e consultivos para diálogo procedural e memória de contexto
+DADOS_DETALHADOS_PRODUTOS = {
+    "NOTE-01": {
+        "nome": "MacBook Air 15\" M3",
+        "cor": "Cinza-espacial (Space Gray) com acabamento unibody em alumínio 100% reciclado",
+        "bateria": "Até 18 horas de autonomia em uso contínuo; acompanha carregador MagSafe 3 com cabo trançado",
+        "garantia": "12 meses de garantia oficial CORE Hardware com cobertura nacional e nota fiscal eletrônica (NF-e)",
+        "acessorios_sugeridos": "Mouse Logitech MX Master 3S e Monitor Dell UltraSharp 27\" 4K com Hub USB-C de 90W",
+        "destaque": "Chip Apple M3 (CPU 8-core, GPU 10-core), 16GB RAM unificada, 512GB SSD ultrarrápido e arquitetura fanless totalmente silenciosa",
+    },
+    "NOTE-02": {
+        "nome": "Dell XPS 13 Plus",
+        "cor": "Alumínio usinado CNC na cor Grafite/Platina com apoio para mãos em vidro e touchpad háptico contínuo",
+        "bateria": "Até 12 horas de autonomia em produtividade contínua; acompanha carregador USB-C de 60W com tecnologia ExpressCharge",
+        "garantia": "12 meses de garantia oficial CORE Hardware com suporte técnico dedicado e nota fiscal eletrônica (NF-e)",
+        "acessorios_sugeridos": "Mouse Logitech MX Master 3S e Teclado Mecânico Keychron K2 Pro",
+        "destaque": "Intel Core i7 13ª Geração, 32GB RAM LPDDR5, 1TB SSD NVMe e exuberante tela 3.5K OLED touchscreen",
+    },
+    "NOTE-03": {
+        "nome": "Lenovo Legion Pro 5",
+        "cor": "Cinza Ônix (Onyx Grey) com chassi reforçado e acabamento gamer discreto de alta resistência",
+        "bateria": "Bateria de 80Wh para tarefas diárias e carregador de 300W para extrair potência máxima em jogos e renderização",
+        "garantia": "12 meses de garantia oficial CORE Hardware com suporte especializado para hardware de alta performance e nota fiscal eletrônica (NF-e)",
+        "acessorios_sugeridos": "Teclado Keychron K2 Pro e Mouse Logitech MX Master 3S",
+        "destaque": "AMD Ryzen 7 7745HX, GPU Nvidia GeForce RTX 4070 8GB, 32GB RAM e 1TB SSD. (Atenção: atualmente esgotado em estoque)",
+    },
+    "PERIF-01": {
+        "nome": "Mouse Logitech MX Master 3S",
+        "cor": "Grafite fosco com textura ergonômica emborrachada resistente a desgaste",
+        "bateria": "Bateria recarregável com até 70 dias com carga completa; recarga rápida USB-C garante 3 horas de uso em apenas 1 minuto",
+        "garantia": "12 meses de garantia oficial CORE Hardware e nota fiscal eletrônica (NF-e)",
+        "acessorios_sugeridos": "Teclado Mecânico Keychron K2 Pro para formar o combo definitivo de produtividade",
+        "destaque": "Sensor Darkfield 8K DPI (opera inclusive em vidro), roda MagSpeed magnética ultra silenciosa e botões silenciosos Quiet Clicks",
+    },
+    "PERIF-02": {
+        "nome": "Teclado Keychron K2 Pro",
+        "cor": "Chassi preto com keycaps PBT Double-Shot em tons de cinza grafite e detalhes em vermelho/laranja",
+        "bateria": "Bateria interna recarregável de 4.000 mAh que oferece até 240 horas de digitação contínua (com iluminação desligada)",
+        "garantia": "12 meses de garantia oficial CORE Hardware e nota fiscal eletrônica (NF-e)",
+        "acessorios_sugeridos": "Mouse Logitech MX Master 3S para pareamento multi-dispositivo perfeito",
+        "destaque": "Switches Red lubrificados de fábrica, layout 75%, hot-swappable e compatibilidade nativa Mac/Windows com Bluetooth 5.1",
+    },
+    "MON-01": {
+        "nome": "Monitor Dell UltraSharp 27\" 4K",
+        "cor": "Acabamento premium em prata platina com base metálica ergonômica e bordas ultrafinas InfinityEdge",
+        "bateria": "Alimentação direta bivolt com Hub USB-C embutido capaz de fornecer até 90W de energia (Power Delivery) para recarregar seu notebook",
+        "garantia": "12 meses de garantia oficial CORE Hardware com política de painel premium e nota fiscal eletrônica (NF-e)",
+        "acessorios_sugeridos": "Notebooks MacBook Air M3 ou Dell XPS 13 Plus para conexão em cabo único USB-C",
+        "destaque": "Painel IPS Black 4K UHD (U2723QE), contraste 2000:1, 98% DCI-P3, hub USB-C com portas RJ45 e USB de alta velocidade",
+    },
+    "GPU-01": {
+        "nome": "Nvidia GeForce RTX 4060 Ti 8GB",
+        "cor": "Preto fosco com detalhes industriais metálicos e iluminação discreta",
+        "bateria": "Consumo energético de 160W TDP (recomendamos fonte com certificação 80 Plus de 550W a 650W)",
+        "garantia": "12 meses de garantia oficial CORE Hardware com assistência técnica e nota fiscal eletrônica (NF-e)",
+        "acessorios_sugeridos": "Monitor Dell UltraSharp 27\" 4K para aproveitar resolução ultra nítida e altas taxas de quadros",
+        "destaque": "8GB GDDR6, sistema Dual Fan eficiente, suporte a Ray Tracing de 3ª Geração e DLSS 3 Frame Generation",
+    },
 }
 
 
@@ -134,6 +213,25 @@ def _encontrar_produto_aproximado(mensagem: str) -> Optional[Tuple[str, str]]:
             return DICIONARIO_TERMOS_PRODUTOS[chave_encontrada]
 
     return None
+
+
+def _recuperar_produto_do_historico(
+    history: Optional[List[Dict[str, str]]]
+) -> Optional[Tuple[str, str]]:
+    """Percorre o histórico de trás para frente para identificar o último produto em pauta."""
+    if not history:
+        return None
+
+    for msg in reversed(history):
+        content = msg.get("content", "")
+        prod = _encontrar_produto_aproximado(content)
+        if prod:
+            return prod
+
+def _formatar_preco_br(preco: float) -> str:
+    """Formata valor monetário no padrão brasileiro (R$ 11.999,00)."""
+    formatado = f"{preco:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {formatado}"
 
 
 def _executar_fallback_deterministico(
@@ -255,19 +353,132 @@ def _executar_fallback_deterministico(
             if estoque == 0:
                 reply = (
                     f"O notebook **{nome}** ({specs}) está atualmente **esgotado** em nosso estoque (0 unidades disponíveis). "
-                    f"O preço oficial de tabela é **R$ {preco:,.2f}**.\n\n"
+                    f"O preço oficial de tabela é **{_formatar_preco_br(preco)}**.\n\n"
                     "Deseja que registremos seu interesse ou gostaria de conhecer o **MacBook Air M3** ou o **Dell XPS 13 Plus** como opções disponíveis?"
                 )
             else:
                 reply = (
                     f"Com certeza! Temos o **{nome}** ({specs}) disponível em nosso estoque.\n\n"
                     f"• **Quantidade disponível:** {estoque} unidades\n"
-                    f"• **Preço unitário:** R$ {preco:,.2f}\n\n"
+                    f"• **Preço unitário:** {_formatar_preco_br(preco)}\n\n"
                     "Gostaria de tirar alguma dúvida sobre as especificações técnicas ou ver um comparativo?"
                 )
             return reply, tools_called, dashboard
 
-    # 8. Resposta conversacional natural quando o item não for identificado
+    # 8. Diálogo Procedural e Memória de Contexto do Histórico
+    produto_contexto = _recuperar_produto_do_historico(history)
+    if produto_contexto:
+        item_id, item_nome = produto_contexto
+        resultado = consultar_estoque(item_id)
+        if resultado.get("encontrado"):
+            tools_called.append("consultar_estoque")
+            nome = resultado["nome"]
+            estoque = resultado["estoque"]
+            preco = resultado["preco"]
+            specs = resultado["especificacoes"]
+            detalhes = DADOS_DETALHADOS_PRODUTOS.get(item_id, {})
+            cor_info = detalhes.get("cor", "Acabamento de alto padrão.")
+            bateria_info = detalhes.get("bateria", "Alimentação de alta eficiência.")
+            garantia_info = detalhes.get("garantia", "12 meses de garantia oficial com NF-e.")
+            sugeridos = detalhes.get("acessorios_sugeridos")
+            destaque = detalhes.get("destaque", specs)
+
+            # Caso A: Pergunta sobre Preço / Valor / Condições de Pagamento
+            termos_preco = ["quanto custa", "preco", "preço", "valor", "custa", "quanto sai", "parcela", "parcelamento", "desconto", "pagamento"]
+            if any(termo in msg_lower for termo in termos_preco):
+                if estoque == 0:
+                    reply = (
+                        f"Em relação ao **{nome}**, o valor oficial de tabela é **{_formatar_preco_br(preco)}**.\n\n"
+                        f"Atualmente este modelo está **esgotado** em nosso estoque (0 unidades disponíveis). "
+                        f"Quando o lote for reposto, disponibilizaremos condições em até 10x sem juros ou com 5% de desconto via PIX à vista na CORE Hardware!"
+                    )
+                else:
+                    reply = (
+                        f"O **{nome}** custa **{_formatar_preco_br(preco)}**.\n\n"
+                        f"• **Condições:** Em até 10x sem juros no cartão ou com 5% de desconto via PIX à vista.\n"
+                        f"• **Disponibilidade:** Temos {estoque} unidades em estoque a pronta entrega.\n\n"
+                        f"Gostaria de consultar as opções de entrega ou tirar mais dúvidas sobre o modelo?"
+                    )
+                return reply, tools_called, dashboard
+
+            # Caso B: Pergunta sobre Cor / Design / Acabamento
+            termos_cor = ["cor", "cores", "acabamento", "design", "preto", "cinza", "prata", "grafite"]
+            if any(termo in msg_lower for termo in termos_cor):
+                reply = (
+                    f"Sobre a cor e estética do **{nome}**:\n\n"
+                    f"• **Cor e Acabamento:** {cor_info}.\n\n"
+                    f"O acabamento foi desenvolvido visando máxima durabilidade e sofisticação. "
+                    f"Deseja saber mais sobre as especificações ou disponibilidade deste modelo?"
+                )
+                return reply, tools_called, dashboard
+
+            # Caso C: Pergunta sobre Bateria / Autonomia / Energia / TDP / Fonte
+            termos_bateria = ["bateria", "autonomia", "carregador", "dura", "duracao", "duração", "carga", "consumo", "tdp", "fonte"]
+            if any(termo in msg_lower for termo in termos_bateria):
+                reply = (
+                    f"Sobre a autonomia e consumo do **{nome}**:\n\n"
+                    f"• **Bateria & Alimentação:** {bateria_info}.\n\n"
+                    f"Excelente eficiência para seu fluxo de trabalho. Posso te ajudar com alguma outra especificação técnica ou estoque?"
+                )
+                return reply, tools_called, dashboard
+
+            # Caso D: Pergunta sobre Garantia / Nota Fiscal / Suporte
+            termos_garantia = ["garantia", "suporte", "nota", "fiscal", "nf", "original", "seguro"]
+            if any(termo in msg_lower for termo in termos_garantia):
+                reply = (
+                    f"Sim! O **{nome}** acompanha **{garantia_info}**.\n\n"
+                    f"Todos os nossos envios na **CORE Hardware** contam com nota fiscal emitida no seu nome, rastreamento seguro e canal direto de suporte pós-venda. "
+                    f"Deseja verificar formas de pagamento ou prazo de entrega?"
+                )
+                return reply, tools_called, dashboard
+
+            # Caso E: Pergunta sobre Estoque / Unidades Disponíveis / Envio
+            termos_estoque = ["estoque", "quantos", "quantas", "tem pronta", "pronta entrega", "frete", "entrega", "envio", "prazo"]
+            if any(termo in msg_lower for termo in termos_estoque):
+                if estoque == 0:
+                    reply = (
+                        f"No momento o **{nome}** está com **0 unidades em estoque (esgotado)**. "
+                        f"O valor de tabela é {_formatar_preco_br(preco)}.\n\n"
+                        f"Gostaria de ver modelos equivalentes disponíveis em nosso catálogo?"
+                    )
+                else:
+                    reply = (
+                        f"Temos exatamente **{estoque} unidades** do **{nome}** disponíveis para envio imediato.\n\n"
+                        f"O valor unitário é **{_formatar_preco_br(preco)}** com despacho em até 24h úteis para todo o Brasil. "
+                        f"Gostaria de garantir o seu?"
+                    )
+                return reply, tools_called, dashboard
+
+            # Caso F: Pergunta sobre Especificações / Configuração / Processador / Memória
+            termos_specs = ["especificacao", "especificacoes", "especificação", "especificações", "specs", "configuracao", "configuração", "config", "memoria", "memória", "ram", "ssd", "processador", "cpu", "tela", "display"]
+            if any(termo in msg_lower for termo in termos_specs):
+                reply = (
+                    f"Aqui estão as especificações do **{nome}**:\n\n"
+                    f"• **Especificações Oficiais:** {specs}\n"
+                    f"• **Destaque Técnico:** {destaque}\n\n"
+                )
+                if sugeridos:
+                    reply += f"💡 **Sugestão Consultiva:** Este item combina perfeitamente com {sugeridos}.\n\n"
+                reply += "Deseja ver opções de pagamento ou consultar o estoque?"
+                return reply, tools_called, dashboard
+
+            # Caso G: Diálogo Procedural Geral / Pronome anafórico ("ele", "dele", "gostei", "fale mais")
+            termos_anaforicos = ["ele", "dele", "nele", "esse", "este", "desse", "deste", "gostei", "quero", "detalhe", "detalhes", "mais sobre"]
+            if any(termo in msg_lower for termo in termos_anaforicos):
+                status_txt = f"{estoque} unidades disponíveis" if estoque > 0 else "atualmente esgotado"
+                reply = (
+                    f"Com certeza! Falando sobre o **{nome}**:\n\n"
+                    f"• **Especificações:** {specs}\n"
+                    f"• **Preço:** {_formatar_preco_br(preco)}\n"
+                    f"• **Estoque:** {status_txt}\n"
+                    f"• **Garantia:** 12 meses oficiais CORE Hardware com NF-e\n\n"
+                )
+                if sugeridos:
+                    reply += f"💡 **Sugestão Consultiva CORE Hardware:** Para completar sua experiência, recomendamos o {sugeridos}.\n\n"
+                reply += "Gostaria de saber algo específico sobre ele ou finalizar a compra?"
+                return reply, tools_called, dashboard
+
+    # 9. Resposta conversacional natural quando o item não for identificado
     tools_called.append("consultar_estoque")
     return (
         "Entendi sua dúvida! Não localizei exatamente esse modelo específico em nosso catálogo, mas na **CORE Hardware** trabalhamos com os seguintes equipamentos selecionados:\n\n"
@@ -400,9 +611,15 @@ class AIService:
 
             contents: List[Any] = []
             if history:
+                user_turn_started = False
                 for h in history:
                     role = "user" if h.get("role") == "user" else "model"
-                    contents.append(types.Content(role=role, parts=[types.Part.from_text(text=h.get("content", ""))]))
+                    if not user_turn_started:
+                        if role == "user":
+                            user_turn_started = True
+                            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=h.get("content", ""))]))
+                    else:
+                        contents.append(types.Content(role=role, parts=[types.Part.from_text(text=h.get("content", ""))]))
             contents.append(types.Content(role="user", parts=[types.Part.from_text(text=message)]))
 
             response = client.models.generate_content(

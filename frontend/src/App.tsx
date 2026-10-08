@@ -10,7 +10,8 @@ import {
   Laptop,
   HardDrive,
   BarChart3,
-  BotMessageSquare
+  BotMessageSquare,
+  Database
 } from 'lucide-react';
 import { HardwareDashboard, DashboardData } from './components/HardwareDashboard';
 import Markdown from 'react-markdown';
@@ -45,8 +46,23 @@ const INITIAL_MESSAGE: Message = {
   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
 };
 
+const STORAGE_KEY = 'core_hardware_chat_history';
+
 export default function App() {
-  const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar mensagens do localStorage:', e);
+    }
+    return [INITIAL_MESSAGE];
+  });
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
@@ -55,6 +71,15 @@ export default function App() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const API_BASE_URL = 'http://localhost:8000';
+
+  // Persistir histórico de mensagens no localStorage para memória conversacional contínua
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    } catch (e) {
+      console.warn('Erro ao salvar mensagens no localStorage:', e);
+    }
+  }, [messages]);
 
   // Verificar status da API no carregamento
   useEffect(() => {
@@ -97,11 +122,14 @@ export default function App() {
     setIsLoading(true);
 
     try {
-      // Montar histórico para a API
-      const history = newMessages.slice(1, -1).map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      // Montar histórico contextual para a API mantendo até os últimos 10 turnos relevantes
+      const history = newMessages
+        .filter((m) => m.id !== 'init-1' && m.id !== userMessage.id && !m.content.startsWith('⚠️'))
+        .slice(-10)
+        .map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
 
       const res = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
@@ -158,6 +186,11 @@ export default function App() {
   };
 
   const handleClearHistory = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      console.warn('Erro ao limpar histórico do localStorage:', e);
+    }
     setMessages([INITIAL_MESSAGE]);
   };
 
@@ -287,9 +320,18 @@ export default function App() {
               </span>
             </div>
 
+            {/* Indicador de Memória Local */}
+            <div
+              title="Histórico persistido localmente via localStorage"
+              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900/70 border border-zinc-800 text-[11px] text-zinc-400 font-mono"
+            >
+              <Database className="h-3 w-3 text-cyan-400" />
+              <span>Memória Ativa</span>
+            </div>
+
             <button
               onClick={handleClearHistory}
-              title="Reiniciar conversa"
+              title="Reiniciar conversa e limpar histórico salvo no localStorage"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 bg-zinc-850 hover:bg-zinc-800 border border-zinc-750 transition"
             >
               <RotateCcw className="h-3.5 w-3.5" />
