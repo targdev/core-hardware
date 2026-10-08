@@ -6,8 +6,6 @@ import {
   User,
   RotateCcw,
   Sparkles,
-  Layers,
-  CheckCircle2,
   HelpCircle,
   Laptop,
   HardDrive,
@@ -355,28 +353,10 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* Informações da Resposta: Provedor e Tool Calling */}
-                  {!isUser && (
-                    <div className="flex flex-wrap items-center gap-2 pt-0.5 pl-1">
+                  {/* Badge discreto do assistente / provedor */}
+                  {!isUser && message.provider && (
+                    <div className="flex items-center gap-2 pt-0.5 pl-1">
                       {renderProviderBadge(message.provider)}
-
-                      {message.tools_called && message.tools_called.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-[11px] text-zinc-500 font-mono flex items-center gap-1">
-                            <Layers className="h-3 w-3 text-cyan-400" />
-                            Tools:
-                          </span>
-                          {message.tools_called.map((tool, tIdx) => (
-                            <span
-                              key={tIdx}
-                              className="inline-flex items-center gap-1 text-[11px] font-mono font-medium px-2 py-0.5 rounded-full bg-cyan-950/60 border border-cyan-800/50 text-cyan-300"
-                            >
-                              <CheckCircle2 className="h-3 w-3 text-emerald-400" />
-                              {tool}()
-                            </span>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   )}
 
