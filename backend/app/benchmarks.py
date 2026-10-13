@@ -291,7 +291,7 @@ def obter_dashboard_benchmarks(mensagem_ou_termo: str) -> Optional[Dict[str, Any
         "qual melhor", "qual o melhor", "notebooks", "macbook vs", "xps vs", "legion vs",
         "dashboard de comparacao", "dashboard de comparação", "desempenho dos notebooks", "benchmarks notebooks"
     ]
-    if any(g in texto for g in gatilhos_notebooks) and ("notebook" in texto or "macbook" in texto or "xps" in texto or "legion" in texto or "qual" in texto or "comparar" in texto):
+    if any(g in texto for g in gatilhos_notebooks):
         return gerar_dashboard_comparativo_notebooks()
 
     # Intenções de GPU / RTX / Placa de vídeo

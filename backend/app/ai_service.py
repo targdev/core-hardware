@@ -219,17 +219,50 @@ def _encontrar_produto_aproximado(mensagem: str) -> Optional[Tuple[str, str]]:
 
 
 def _recuperar_produto_do_historico(
-    history: Optional[List[Dict[str, str]]]
+    history: Optional[List[Dict[str, str]]],
+    user_profile: Optional[UserProfile] = None,
 ) -> Optional[Tuple[str, str]]:
-    """Percorre o histórico de trás para frente para identificar o último produto em pauta."""
-    if not history:
-        return None
+    """Percorre o histórico de trás para frente ou recorre ao perfil do usuário para identificar o produto em pauta."""
+    if history:
+        for msg in reversed(history):
+            content = msg.get("content", "")
+            prod = _encontrar_produto_aproximado(content)
+            if prod:
+                return prod
 
-    for msg in reversed(history):
-        content = msg.get("content", "")
-        prod = _encontrar_produto_aproximado(content)
-        if prod:
-            return prod
+    # Fallback para o produto memorizado no perfil persistente do usuário
+    if user_profile and user_profile.ultimo_produto_id:
+        p_id = user_profile.ultimo_produto_id
+        if p_id in DADOS_DETALHADOS_PRODUTOS:
+            return p_id, user_profile.ultimo_produto_nome or DADOS_DETALHADOS_PRODUTOS[p_id]["nome"]
+
+    return None
+
+
+def _analisar_ultima_pergunta_assistente(
+    history: Optional[List[Dict[str, str]]],
+    user_profile: Optional[UserProfile] = None,
+) -> Optional[str]:
+    """Identifica a intenção ou proposta que o assistente fez na última mensagem."""
+    if history:
+        for msg in reversed(history):
+            if msg.get("role") in ("assistant", "model"):
+                texto = msg.get("content", "").lower()
+                if "especificações técnicas ou ver um comparativo" in texto or "comparativo" in texto or "especificações" in texto or "especificacoes" in texto:
+                    return "comparativo_ou_specs"
+                if "opções de entrega" in texto or "prazo de entrega" in texto or "formas de pagamento" in texto or "entrega" in texto:
+                    return "entrega_e_pagamento"
+                if "garantir o seu" in texto or "finalizar a compra" in texto or "garantir sua unidade" in texto or "reservar" in texto:
+                    return "garantir_compra"
+                if "modelos equivalentes" in texto or "opções disponíveis" in texto or "conhecer o macbook" in texto:
+                    return "modelos_equivalentes"
+                if "especificação técnica ou estoque" in texto or "disponibilidade deste modelo" in texto:
+                    return "specs_ou_estoque"
+                break
+    if user_profile and getattr(user_profile, "ultima_oferta_ia", None):
+        return user_profile.ultima_oferta_ia
+    return None
+
 
 def _formatar_preco_br(preco: float) -> str:
     """Formata valor monetário no padrão brasileiro (R$ 11.999,00)."""
@@ -253,6 +286,10 @@ def _gerar_prompt_com_perfil(perfil: Optional[UserProfile]) -> str:
         itens.append(f"Marcas preferidas: {', '.join(perfil.marcas_favoritas)}")
     if perfil.interesses:
         itens.append(f"Áreas de interesse / foco de uso: {', '.join(perfil.interesses)}")
+    if perfil.ultimo_produto_nome:
+        itens.append(f"Último produto consultado ou em foco: {perfil.ultimo_produto_nome} (ID: {perfil.ultimo_produto_id})")
+    if perfil.ultima_oferta_ia:
+        itens.append(f"Última proposta ou sugestão feita pelo assistente no diálogo: {perfil.ultima_oferta_ia}")
 
     if not itens:
         return SYSTEM_PROMPT
@@ -260,7 +297,7 @@ def _gerar_prompt_com_perfil(perfil: Optional[UserProfile]) -> str:
     bloco_perfil = (
         "\n\n[DADOS E PREFERÊNCIAS MEMORIZADAS DO CLIENTE]:\n"
         + "\n".join(f"- {item}" for item in itens)
-        + "\nDiretriz de Relacionamento: Chame o cliente cordialmente pelo nome e adapte sugestões e periféricos às suas marcas e interesses declarados."
+        + "\nDiretrizes de Continuidade: Chame o cliente cordialmente pelo nome, mantenha continuidade com o produto em foco e, se o cliente responder 'Sim', 'Quero', 'Com certeza' ou pedir comparativo/especificações, atenda imediatamente à proposta sem reiniciar a consulta."
     )
     return SYSTEM_PROMPT + bloco_perfil
 
@@ -573,14 +610,18 @@ def _executar_fallback_deterministico(
             estoque = resultado["estoque"]
             preco = resultado["preco"]
             specs = resultado["especificacoes"]
+            perfil.ultimo_produto_id = item_id
+            perfil.ultimo_produto_nome = nome
 
             if estoque == 0:
+                perfil.ultima_oferta_ia = "modelos_equivalentes"
                 reply = (
                     f"O notebook **{nome}** ({specs}) está atualmente **esgotado** em nosso estoque (0 unidades disponíveis). "
                     f"O preço oficial de tabela é **{_formatar_preco_br(preco)}**.\n\n"
                     "Deseja que registremos seu interesse ou gostaria de conhecer o **MacBook Air M3** ou o **Dell XPS 13 Plus** como opções disponíveis?"
                 )
             else:
+                perfil.ultima_oferta_ia = "comparativo_ou_specs"
                 reply = (
                     f"Com certeza! Temos o **{nome}** ({specs}) disponível em nosso estoque.\n\n"
                     f"• **Quantidade disponível:** {estoque} unidades\n"
@@ -590,7 +631,7 @@ def _executar_fallback_deterministico(
             return reply, tools_called, dashboard, perfil
 
     # 8. Diálogo Procedural e Memória de Contexto do Histórico
-    produto_contexto = _recuperar_produto_do_historico(history)
+    produto_contexto = _recuperar_produto_do_historico(history, perfil)
     if produto_contexto:
         item_id, item_nome = produto_contexto
         resultado = consultar_estoque(item_id)
@@ -607,6 +648,168 @@ def _executar_fallback_deterministico(
             sugeridos = detalhes.get("acessorios_sugeridos")
             destaque = detalhes.get("destaque", specs)
 
+            perfil.ultimo_produto_id = item_id
+            perfil.ultimo_produto_nome = nome
+            ultima_oferta = _analisar_ultima_pergunta_assistente(history, perfil)
+
+            # Caso 1: Negação / Encerramento cortês ("não", "não precisa", "não obrigado")
+            indicadores_negacao = [
+                "não precisa", "nao precisa", "não obrigado", "nao obrigado",
+                "agora não", "agora nao", "por enquanto não", "por enquanto nao",
+                "não quero", "nao quero", "deixa pra lá", "deixa pra la"
+            ]
+            eh_negacao = (
+                any(ind in msg_lower for ind in indicadores_negacao)
+                or msg_lower in ["nao", "não", "não.", "nao.", "nada", "dispensa", "nem", "não, obrigado", "nao, obrigado"]
+            )
+            if eh_negacao:
+                reply = (
+                    f"Perfeito{saudacao_nome}! Sem problemas. Fico à inteira disposição para quando quiser consultar outro equipamento, valores, estoque ou tirar dúvidas técnicas na **CORE Hardware**.\n\n"
+                    "Como posso te ajudar agora?"
+                )
+                return reply, tools_called, None, perfil
+
+            # Caso 2: Afirmação / Concordância ("Sim", "Quero", "Claro", "Com certeza", "Pode ser", "Por favor", "Mostra", "Comparativo")
+            termos_afirmacao = [
+                "sim", "quero", "claro", "com certeza", "pode ser", "por favor", "gostaria",
+                "mostra", "me mostra", "manda", "pode mandar", "compara", "comparativo",
+                "especificacoes", "especificações", "duvida", "dúvida", "ok", "beleza",
+                "bora", "pode", "manda ver", "quero sim", "sim por favor", "sim!", "claro!",
+                "gostei", "quero ver", "ver comparativo", "comparar", "analise", "análise",
+                "fale mais", "mais detalhes", "me fale mais", "explica", "me explica", "pode falar"
+            ]
+            eh_afirmacao = (
+                msg_lower in termos_afirmacao
+                or any(msg_lower.startswith(t) for t in ["sim", "claro", "com certeza", "pode ser", "quero", "por favor", "mostra", "manda", "ok", "bora", "pode", "beleza"])
+                or any(re.search(rf"\b{re.escape(t)}\b", msg_lower) for t in ["sim", "quero", "claro", "com certeza", "pode ser", "por favor", "gostaria", "mostra", "comparativo", "especificações", "especificacoes"])
+            )
+
+            if eh_afirmacao:
+                if ultima_oferta == "comparativo_ou_specs" or any(termo in msg_lower for termo in ["comparativo", "compara", "comparar", "analise", "análise", "especificacao", "especificações", "specs"]):
+                    if item_id in ("NOTE-01", "NOTE-02", "NOTE-03"):
+                        dashboard_comp = obter_dashboard_benchmarks("comparativo")
+                        reply = (
+                            f"Com certeza{saudacao_nome}! Aqui está a análise aprofundada e o comparativo técnico do **{nome}**:\n\n"
+                            f"• **Ficha Técnica & Destaque do {nome}:**\n"
+                            f"  - **Especificações:** {specs}\n"
+                            f"  - **Destaque:** {destaque}\n"
+                            f"  - **Autonomia & Eficiência:** {bateria_info}\n"
+                            f"  - **Design & Acabamento:** {cor_info}\n"
+                            f"  - **Garantia:** {garantia_info}\n\n"
+                            "📊 **Comparativo Consultivo com os Principais Modelos:**\n"
+                            "  - **MacBook Air 15\" M3 (R$ 11.999,00):** Campeão de autonomia (até 18h), design silencioso fanless e ecossistema macOS ultra fluido para programação e negócios.\n"
+                            "  - **Dell XPS 13 Plus (R$ 10.850,00):** Incrível tela 3.5K OLED touchscreen, 32GB RAM e chassi futurista de alumínio usinado.\n"
+                            "  - **Lenovo Legion Pro 5 (R$ 9.400,00 - Esgotado):** Focado em potência máxima para games e 3D com Ryzen 7 e RTX 4070.\n\n"
+                        )
+                        if sugeridos:
+                            reply += f"💡 **Sugestão Consultiva:** Este modelo forma o setup ideal combinado com {sugeridos}.\n\n"
+                        reply += "👉 **Confira o comparativo gráfico interativo anexado no painel acima!** Deseja consultar as condições de pagamento e prazos de entrega?"
+                        perfil.ultima_oferta_ia = "entrega_e_pagamento"
+                        return reply, tools_called, dashboard_comp, perfil
+
+                    elif item_id == "GPU-01":
+                        dashboard_gpu = obter_dashboard_benchmarks("rtx 4060")
+                        reply = (
+                            f"Com certeza{saudacao_nome}! Aqui estão os benchmarks e a análise de desempenho da **{nome}**:\n\n"
+                            f"• **Especificações:** {specs}\n"
+                            f"• **Desempenho Aferido:** 104 FPS em Cyberpunk 2077 (1080p Ultra RT + DLSS 3) e 115 FPS em Warzone 2.\n"
+                            f"• **Eficiência:** Consumo de apenas 160W TDP com excelente controle térmico.\n\n"
+                            "👉 **Veja os gráficos de telemetria no mini dashboard anexado!** Deseja verificar condições de pagamento ou entrega?"
+                        )
+                        perfil.ultima_oferta_ia = "entrega_e_pagamento"
+                        return reply, tools_called, dashboard_gpu, perfil
+
+                    elif item_id in ("PERIF-01", "PERIF-02"):
+                        dashboard_perif = obter_dashboard_benchmarks("mouse teclado")
+                        reply = (
+                            f"Com certeza{saudacao_nome}! Falando sobre o **{nome}** no setup de produtividade:\n\n"
+                            f"• **Destaque:** {destaque}\n"
+                            f"• **Bateria & Conexão:** {bateria_info}\n"
+                            f"• **Acabamento:** {cor_info}\n\n"
+                            "👉 **Confira o comparativo de periféricos no dashboard anexado!** Gostaria de verificar condições de pagamento ou estoque?"
+                        )
+                        perfil.ultima_oferta_ia = "entrega_e_pagamento"
+                        return reply, tools_called, dashboard_perif, perfil
+
+                    elif item_id == "MON-01":
+                        dashboard_mon = obter_dashboard_benchmarks("monitor 4k")
+                        reply = (
+                            f"Com certeza{saudacao_nome}! Aqui está a análise técnica do **{nome}**:\n\n"
+                            f"• **Painel & Fidelidade:** {destaque}\n"
+                            f"• **Conectividade:** {bateria_info}\n"
+                            f"• **Garantia:** {garantia_info}\n\n"
+                            "👉 **Confira a análise visual no dashboard anexado!** Gostaria de verificar opções de frete e parcelamento?"
+                        )
+                        perfil.ultima_oferta_ia = "entrega_e_pagamento"
+                        return reply, tools_called, dashboard_mon, perfil
+
+                elif ultima_oferta == "entrega_e_pagamento":
+                    reply = (
+                        f"Com certeza{saudacao_nome}! Aqui estão as condições de envio e pagamento para o **{nome}**:\n\n"
+                        f"• **Preço de Tabela:** {_formatar_preco_br(preco)}\n"
+                        f"• **Condições Especiais:**\n"
+                        f"  - **À vista via PIX (5% OFF):** {_formatar_preco_br(preco * 0.95)}\n"
+                        f"  - **Cartão de Crédito:** Em até 10x sem juros de {_formatar_preco_br(preco / 10)}\n"
+                        f"• **Frete & Logística:** Despacho expresso em até 24h úteis para todo o Brasil com código de rastreamento seguro.\n"
+                        f"• **Garantia:** 12 meses oficiais CORE Hardware e Nota Fiscal Eletrônica (NF-e) emitida no seu nome.\n\n"
+                        "Gostaria de garantir a reserva de uma unidade agora mesmo no seu perfil?"
+                    )
+                    perfil.ultima_oferta_ia = "garantir_compra"
+                    return reply, tools_called, None, perfil
+
+                elif ultima_oferta == "garantir_compra":
+                    loc_str = f" para envio até {perfil.cidade}" if perfil.cidade else " para despacho imediato"
+                    reply = (
+                        f"Excelente decisão{saudacao_nome}! Vamos registrar a reserva do seu **{nome}**{loc_str}.\n\n"
+                        f"• **Equipamento:** {nome} ({specs})\n"
+                        f"• **Valor:** {_formatar_preco_br(preco)} (ou {_formatar_preco_br(preco * 0.95)} via PIX à vista)\n"
+                        f"• **Disponibilidade:** {estoque} unidades em estoque\n\n"
+                        "Para emitirmos a sua Nota Fiscal Eletrônica, você prefere concluir via PIX à vista (com 5% de desconto) ou no cartão de crédito em até 10x sem juros?"
+                    )
+                    perfil.ultima_oferta_ia = "forma_pagamento"
+                    return reply, tools_called, None, perfil
+
+                elif ultima_oferta == "modelos_equivalentes" or estoque == 0:
+                    reply = (
+                        f"Perfeito{saudacao_nome}! Como o **{nome}** está esgotado no momento, temos estas duas excelentes alternativas a pronta entrega no catálogo oficial:\n\n"
+                        "1. **MacBook Air 15\" M3 (R$ 11.999,00 - 4 un. em estoque):**\n"
+                        "   • Eficiência energética de ponta com até 18 horas de bateria e chassi ultrafino silencioso (fanless).\n\n"
+                        "2. **Dell XPS 13 Plus (R$ 10.850,00 - 2 un. em estoque):**\n"
+                        "   • Deslumbrante tela 3.5K OLED touchscreen, 32GB de memória RAM e processador Intel Core i7 13ª Ger.\n\n"
+                        "Gostaria de ver o comparativo detalhado ou consultar as especificações de algum deles?"
+                    )
+                    perfil.ultima_oferta_ia = "comparativo_ou_specs"
+                    return reply, ["listar_produtos", "consultar_estoque"], None, perfil
+
+                else:
+                    # Afirmação geral quando há produto em pauta
+                    reply = (
+                        f"Com certeza{saudacao_nome}! Sobre o **{nome}** ({specs}):\n\n"
+                        f"• **Destaque Técnico:** {destaque}\n"
+                        f"• **Disponibilidade:** {estoque} unidades em estoque por {_formatar_preco_br(preco)}\n"
+                        f"• **Acabamento:** {cor_info}\n"
+                        f"• **Bateria & Eficiência:** {bateria_info}\n"
+                        f"• **Garantia:** {garantia_info}\n\n"
+                    )
+                    if sugeridos:
+                        reply += f"💡 **Sugestão Consultiva:** Combina perfeitamente com {sugeridos}.\n\n"
+                    reply += "Deseja consultar opções de entrega e pagamento ou ver um comparativo com outros modelos?"
+                    perfil.ultima_oferta_ia = "comparativo_ou_specs"
+                    return reply, tools_called, None, perfil
+
+            # Caso 3: Opinião Consultiva / Recomendação ("vale a pena", "é bom", "o que você acha")
+            termos_opiniao = ["vale a pena", "é bom", "e bom", "compensa", "o que acha", "sua opiniao", "sua opinião", "recomenda", "indica", "vale o investimento"]
+            if any(termo in msg_lower for termo in termos_opiniao):
+                reply = (
+                    f"Com certeza{saudacao_nome}! Como especialista de hardware da **CORE Hardware**, recomendamos fortemente o **{nome}**:\n\n"
+                    f"• **Por que vale a pena:** {destaque}.\n"
+                    f"• **Perfil Ideal:** Excelente para quem busca máxima confiabilidade, performance duradoura e acabamento premium ({cor_info}).\n"
+                    f"• **Garantia:** {garantia_info}.\n\n"
+                    f"Temos {estoque} unidades disponíveis por {_formatar_preco_br(preco)}. Gostaria de garantir a sua ou ver um comparativo direto com outra opção?"
+                )
+                perfil.ultima_oferta_ia = "comparativo_ou_specs"
+                return reply, tools_called, dashboard, perfil
+
             # Caso A: Pergunta sobre Preço / Valor / Condições de Pagamento
             termos_preco = ["quanto custa", "preco", "preço", "valor", "custa", "quanto sai", "parcela", "parcelamento", "desconto", "pagamento"]
             if any(termo in msg_lower for termo in termos_preco):
@@ -616,13 +819,15 @@ def _executar_fallback_deterministico(
                         f"Atualmente este modelo está **esgotado** em nosso estoque (0 unidades disponíveis). "
                         f"Quando o lote for reposto, disponibilizaremos condições em até 10x sem juros ou com 5% de desconto via PIX à vista na CORE Hardware!"
                     )
+                    perfil.ultima_oferta_ia = "modelos_equivalentes"
                 else:
                     reply = (
                         f"O **{nome}** custa **{_formatar_preco_br(preco)}**.\n\n"
-                        f"• **Condições:** Em até 10x sem juros no cartão ou com 5% de desconto via PIX à vista.\n"
+                        f"• **Condições:** Em até 10x sem juros no cartão ou com 5% de desconto via PIX à vista ({_formatar_preco_br(preco * 0.95)}).\n"
                         f"• **Disponibilidade:** Temos {estoque} unidades em estoque a pronta entrega.\n\n"
                         f"Gostaria de consultar as opções de entrega ou tirar mais dúvidas sobre o modelo?"
                     )
+                    perfil.ultima_oferta_ia = "entrega_e_pagamento"
                 return reply, tools_called, dashboard, perfil
 
             # Caso B: Pergunta sobre Cor / Design / Acabamento
@@ -634,6 +839,7 @@ def _executar_fallback_deterministico(
                     f"O acabamento foi desenvolvido visando máxima durabilidade e sofisticação. "
                     f"Deseja saber mais sobre as especificações ou disponibilidade deste modelo?"
                 )
+                perfil.ultima_oferta_ia = "comparativo_ou_specs"
                 return reply, tools_called, dashboard, perfil
 
             # Caso C: Pergunta sobre Bateria / Autonomia / Energia / TDP / Fonte
@@ -644,6 +850,7 @@ def _executar_fallback_deterministico(
                     f"• **Bateria & Alimentação:** {bateria_info}.\n\n"
                     f"Excelente eficiência para seu fluxo de trabalho. Posso te ajudar com alguma outra especificação técnica ou estoque?"
                 )
+                perfil.ultima_oferta_ia = "comparativo_ou_specs"
                 return reply, tools_called, dashboard, perfil
 
             # Caso D: Pergunta sobre Garantia / Nota Fiscal / Suporte
@@ -654,6 +861,7 @@ def _executar_fallback_deterministico(
                     f"Todos os nossos envios na **CORE Hardware** contam com nota fiscal emitida no seu nome, rastreamento seguro e canal direto de suporte pós-venda. "
                     f"Deseja verificar formas de pagamento ou prazo de entrega?"
                 )
+                perfil.ultima_oferta_ia = "entrega_e_pagamento"
                 return reply, tools_called, dashboard, perfil
 
             # Caso E: Pergunta sobre Estoque / Unidades Disponíveis / Envio
@@ -665,12 +873,14 @@ def _executar_fallback_deterministico(
                         f"O valor de tabela é {_formatar_preco_br(preco)}.\n\n"
                         f"Gostaria de ver modelos equivalentes disponíveis em nosso catálogo?"
                     )
+                    perfil.ultima_oferta_ia = "modelos_equivalentes"
                 else:
                     reply = (
                         f"Temos exatamente **{estoque} unidades** do **{nome}** disponíveis para envio imediato.\n\n"
                         f"O valor unitário é **{_formatar_preco_br(preco)}** com despacho em até 24h úteis para todo o Brasil. "
                         f"Gostaria de garantir o seu?"
                     )
+                    perfil.ultima_oferta_ia = "garantir_compra"
                 return reply, tools_called, dashboard, perfil
 
             # Caso F: Pergunta sobre Especificações / Configuração / Processador / Memória
@@ -684,6 +894,7 @@ def _executar_fallback_deterministico(
                 if sugeridos:
                     reply += f"💡 **Sugestão Consultiva:** Este item combina perfeitamente com {sugeridos}.\n\n"
                 reply += "Deseja ver opções de pagamento ou consultar o estoque?"
+                perfil.ultima_oferta_ia = "entrega_e_pagamento"
                 return reply, tools_called, dashboard, perfil
 
             # Caso G: Diálogo Procedural Geral / Pronome anafórico ("ele", "dele", "gostei", "fale mais")
@@ -700,6 +911,7 @@ def _executar_fallback_deterministico(
                 if sugeridos:
                     reply += f"💡 **Sugestão Consultiva CORE Hardware:** Para completar sua experiência, recomendamos o {sugeridos}.\n\n"
                 reply += "Gostaria de saber algo específico sobre ele ou finalizar a compra?"
+                perfil.ultima_oferta_ia = "garantir_compra"
                 return reply, tools_called, dashboard, perfil
 
     # 9. Resposta conversacional natural quando o item não for identificado

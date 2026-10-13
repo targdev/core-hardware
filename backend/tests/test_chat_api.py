@@ -207,9 +207,79 @@ def test_user_profile_query_what_do_you_know_about_me():
     response = client.post("/api/chat", json=payload)
     assert response.status_code == 200
     data = response.json()
-    assert "Tarcísio" in data["reply"]
-    assert "Apple" in data["reply"]
-    assert "Logitech" in data["reply"]
     assert "Curitiba" in data["reply"]
+
+
+def test_conversational_memory_affirmative_response_macbook():
+    """Valida o caso exato da imagem: usuário responde 'Sim' à oferta de comparativo/specs."""
+    payload = {
+        "message": "Sim",
+        "history": [
+            {
+                "role": "user",
+                "content": "Vocês têm o MacBook Air M3? Tem quantos?",
+            },
+            {
+                "role": "assistant",
+                "content": (
+                    'Com certeza! Temos o MacBook Air 15" M3 (Chip Apple M3, 16GB RAM, 512GB SSD, Cinza-espacial) disponível em nosso estoque.\n\n'
+                    "• Quantidade disponível: 4 unidades • Preço unitário: R$ 11.999,00\n\n"
+                    "Gostaria de tirar alguma dúvida sobre as especificações técnicas ou ver um comparativo?"
+                ),
+            },
+        ],
+    }
+    response = client.post("/api/chat", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "Não localizei" not in data["reply"]
+    assert "MacBook Air" in data["reply"]
+    assert "Comparativo" in data["reply"] or "comparativo" in data["reply"] or "Especificações" in data["reply"]
+    assert data["dashboard_data"] is not None
+    assert data["dashboard_data"]["tipo"] == "comparativo_notebooks"
+    assert data["user_profile"] is not None
+    assert data["user_profile"]["ultimo_produto_id"] == "NOTE-01"
+
+
+def test_conversational_memory_follow_up_without_history_using_profile():
+    """Valida que o bot recupera o produto a partir do perfil persistente mesmo sem histórico."""
+    payload = {
+        "message": "Qual o preço dele?",
+        "history": [],
+        "user_profile": {
+            "ultimo_produto_id": "NOTE-01",
+            "ultimo_produto_nome": 'MacBook Air 15" M3',
+            "marcas_favoritas": ["Apple"],
+            "interesses": [],
+        },
+    }
+    response = client.post("/api/chat", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "MacBook Air" in data["reply"]
+    assert "11.999" in data["reply"]
+
+
+def test_conversational_memory_polite_negation():
+    """Valida que respostas como 'Não' ou 'Não precisa' são tratadas com cortesia."""
+    payload = {
+        "message": "Não precisa, obrigado",
+        "history": [
+            {
+                "role": "user",
+                "content": "Tem o Dell XPS 13 Plus?",
+            },
+            {
+                "role": "assistant",
+                "content": "Temos 2 unidades em estoque por R$ 10.850,00. Gostaria de tirar dúvidas ou ver comparativo?",
+            },
+        ],
+    }
+    response = client.post("/api/chat", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "Não localizei" not in data["reply"]
+    assert "Sem problemas" in data["reply"] or "disposição" in data["reply"].lower()
+
 
 

@@ -27,6 +27,18 @@ class UserProfile(BaseModel):
         default_factory=list,
         description="Áreas de interesse e foco de uso (ex: Programação, Games, Produtividade)",
     )
+    ultimo_produto_id: Optional[str] = Field(
+        default=None,
+        description="ID do último produto consultado ou em discussão (ex: NOTE-01)",
+    )
+    ultimo_produto_nome: Optional[str] = Field(
+        default=None,
+        description="Nome do último produto consultado ou em discussão (ex: MacBook Air 15\" M3)",
+    )
+    ultima_oferta_ia: Optional[str] = Field(
+        default=None,
+        description="Última sugestão ou pergunta feita pelo assistente (ex: comparativo_ou_specs, entrega_e_pagamento)",
+    )
     notas: List[str] = Field(
         default_factory=list,
         description="Outras preferências e dados capturados durante o atendimento",

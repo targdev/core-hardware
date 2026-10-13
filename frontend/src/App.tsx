@@ -27,7 +27,10 @@ export interface UserProfile {
   cidade?: string;
   marcas_favoritas: string[];
   interesses: string[];
-  notas?: string;
+  ultimo_produto_id?: string;
+  ultimo_produto_nome?: string;
+  ultima_oferta_ia?: string;
+  notas?: string[];
 }
 
 interface Message {
@@ -95,7 +98,10 @@ export default function App() {
             cidade: parsed.cidade || undefined,
             marcas_favoritas: Array.isArray(parsed.marcas_favoritas) ? parsed.marcas_favoritas : [],
             interesses: Array.isArray(parsed.interesses) ? parsed.interesses : [],
-            notas: parsed.notas || undefined,
+            ultimo_produto_id: parsed.ultimo_produto_id || undefined,
+            ultimo_produto_nome: parsed.ultimo_produto_nome || undefined,
+            ultima_oferta_ia: parsed.ultima_oferta_ia || undefined,
+            notas: Array.isArray(parsed.notas) ? parsed.notas : undefined,
           };
         }
       }
@@ -467,6 +473,16 @@ export default function App() {
                     <MapPin className="h-4 w-4 text-cyan-400" /> Cidade:
                   </span>
                   <span className="font-semibold text-white">{userProfile.cidade}</span>
+                </div>
+              )}
+
+              {/* Último Produto em Foco */}
+              {userProfile.ultimo_produto_nome && (
+                <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/70 border border-zinc-800/80">
+                  <span className="text-zinc-400 flex items-center gap-1.5">
+                    <Laptop className="h-4 w-4 text-cyan-400" /> Produto em Foco:
+                  </span>
+                  <span className="font-semibold text-cyan-200">{userProfile.ultimo_produto_nome}</span>
                 </div>
               )}
 
