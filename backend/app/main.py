@@ -65,6 +65,7 @@ def chat_endpoint(request: ChatRequest) -> ChatResponse:
             message=request.message,
             history=history_dicts,
             provider=request.provider,
+            user_profile=request.user_profile,
         )
 
         return ChatResponse(
@@ -72,6 +73,7 @@ def chat_endpoint(request: ChatRequest) -> ChatResponse:
             tools_called=resultado.get("tools_called", []),
             dashboard_data=resultado.get("dashboard_data"),
             provider=resultado.get("provider", "fallback_core"),
+            user_profile=resultado.get("user_profile"),
         )
     except Exception as exc:
         logger.error("Erro interno ao processar chat: %s", exc, exc_info=True)

@@ -4,6 +4,7 @@ import {
   Send,
   Bot,
   User,
+  UserCheck,
   RotateCcw,
   Sparkles,
   HelpCircle,
@@ -11,10 +12,23 @@ import {
   HardDrive,
   BarChart3,
   BotMessageSquare,
-  Database
+  Database,
+  X,
+  Tag,
+  MapPin,
+  Bookmark
 } from 'lucide-react';
 import { HardwareDashboard, DashboardData } from './components/HardwareDashboard';
 import Markdown from 'react-markdown';
+
+export interface UserProfile {
+  nome?: string;
+  email?: string;
+  cidade?: string;
+  marcas_favoritas: string[];
+  interesses: string[];
+  notas?: string;
+}
 
 interface Message {
   id: string;
@@ -27,12 +41,13 @@ interface Message {
 }
 
 const QUICK_PROMPTS = [
+  'Meu nome é Tarcísio',
+  'Prefiro produtos da Apple',
+  'O que você sabe sobre mim?',
   '📊 Comparativo de Notebooks (MacBook vs XPS vs Legion)',
   '⚡ Benchmark RTX 4060 Ti e FPS em Jogos',
   '⌨️ Comparar Mouse MX Master 3S e Teclado Keychron',
-  '🖥️ Análise do Monitor Dell UltraSharp 27" 4K',
   'Vocês têm o MacBook Air M3? Tem quantos?',
-  'Tem o Lenovo Legion Pro 5 em estoque?',
 ];
 
 const INITIAL_MESSAGE: Message = {
@@ -47,6 +62,7 @@ const INITIAL_MESSAGE: Message = {
 };
 
 const STORAGE_KEY = 'core_hardware_chat_history';
+const PROFILE_STORAGE_KEY = 'core_hardware_user_profile';
 
 export default function App() {
   const [messages, setMessages] = useState<Message[]>(() => {
@@ -67,6 +83,28 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<'auto' | 'grok' | 'gemini'>('auto');
+  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
+    try {
+      const saved = localStorage.getItem(PROFILE_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          return {
+            nome: parsed.nome || undefined,
+            email: parsed.email || undefined,
+            cidade: parsed.cidade || undefined,
+            marcas_favoritas: Array.isArray(parsed.marcas_favoritas) ? parsed.marcas_favoritas : [],
+            interesses: Array.isArray(parsed.interesses) ? parsed.interesses : [],
+            notas: parsed.notas || undefined,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar perfil do localStorage:', e);
+    }
+    return { marcas_favoritas: [], interesses: [] };
+  });
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -80,6 +118,15 @@ export default function App() {
       console.warn('Erro ao salvar mensagens no localStorage:', e);
     }
   }, [messages]);
+
+  // Persistir perfil do usuário no localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(userProfile));
+    } catch (e) {
+      console.warn('Erro ao salvar perfil no localStorage:', e);
+    }
+  }, [userProfile]);
 
   // Verificar status da API no carregamento
   useEffect(() => {
@@ -140,6 +187,7 @@ export default function App() {
           message: text,
           history: history,
           provider: selectedProvider,
+          user_profile: userProfile,
         }),
       });
 
@@ -157,6 +205,10 @@ export default function App() {
         provider: data.provider || 'fallback_core',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
+
+      if (data.user_profile) {
+        setUserProfile(data.user_profile);
+      }
 
       setMessages((prev) => [...prev, botMessage]);
       setServerOnline(true);
@@ -192,6 +244,17 @@ export default function App() {
       console.warn('Erro ao limpar histórico do localStorage:', e);
     }
     setMessages([INITIAL_MESSAGE]);
+  };
+
+  const handleResetProfile = () => {
+    const emptyProfile: UserProfile = { marcas_favoritas: [], interesses: [] };
+    setUserProfile(emptyProfile);
+    try {
+      localStorage.removeItem(PROFILE_STORAGE_KEY);
+    } catch (e) {
+      console.warn('Erro ao remover perfil do localStorage:', e);
+    }
+    setShowProfileModal(false);
   };
 
   const renderProviderBadge = (provider?: string) => {
@@ -320,6 +383,29 @@ export default function App() {
               </span>
             </div>
 
+            {/* Perfil & Preferências Memorizadas */}
+            <button
+              onClick={() => setShowProfileModal(true)}
+              title="Ver preferências e dados memorizados do usuário"
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-medium border transition ${
+                userProfile.nome
+                  ? 'bg-cyan-950/80 border-cyan-700/80 text-cyan-200 hover:bg-cyan-900/60 shadow-sm shadow-cyan-950/30'
+                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850'
+              }`}
+            >
+              {userProfile.nome ? (
+                <>
+                  <UserCheck className="h-3.5 w-3.5 text-cyan-400" />
+                  <span className="font-semibold text-cyan-300 max-w-[90px] sm:max-w-[120px] truncate">{userProfile.nome}</span>
+                </>
+              ) : (
+                <>
+                  <User className="h-3.5 w-3.5 text-zinc-400" />
+                  <span className="hidden sm:inline">Perfil</span>
+                </>
+              )}
+            </button>
+
             {/* Indicador de Memória Local */}
             <div
               title="Histórico persistido localmente via localStorage"
@@ -340,6 +426,114 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* Modal de Perfil e Preferências do Usuário */}
+      {showProfileModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-[#12161f] p-5 sm:p-6 shadow-2xl shadow-cyan-950/30 text-zinc-200">
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-800/80">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-cyan-950/80 text-cyan-400 border border-cyan-800/60">
+                  <UserCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Perfil do Cliente</h3>
+                  <p className="text-xs text-zinc-400">Dados & Preferências memorizadas pela IA</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowProfileModal(false)}
+                className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-3.5 text-xs sm:text-sm">
+              {/* Nome */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/70 border border-zinc-800/80">
+                <span className="text-zinc-400 flex items-center gap-1.5">
+                  <User className="h-4 w-4 text-cyan-400" /> Nome:
+                </span>
+                <span className="font-semibold text-white">
+                  {userProfile.nome || <em className="text-zinc-500 not-italic">Não informado (Diga: "Meu nome é...")</em>}
+                </span>
+              </div>
+
+              {/* Localização / Cidade */}
+              {userProfile.cidade && (
+                <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/70 border border-zinc-800/80">
+                  <span className="text-zinc-400 flex items-center gap-1.5">
+                    <MapPin className="h-4 w-4 text-cyan-400" /> Cidade:
+                  </span>
+                  <span className="font-semibold text-white">{userProfile.cidade}</span>
+                </div>
+              )}
+
+              {/* Marcas Favoritas */}
+              <div className="p-3 rounded-xl bg-zinc-900/70 border border-zinc-800/80 space-y-2">
+                <div className="text-zinc-400 flex items-center gap-1.5 font-medium">
+                  <Bookmark className="h-4 w-4 text-purple-400" /> Marcas Preferidas:
+                </div>
+                {userProfile.marcas_favoritas.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {userProfile.marcas_favoritas.map((marca, i) => (
+                      <span
+                        key={i}
+                        className="px-2.5 py-0.5 rounded-md bg-purple-950/80 text-purple-300 border border-purple-800/60 text-xs font-medium"
+                      >
+                        {marca}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-zinc-500 text-xs">
+                    Nenhuma marca salva ainda (ex: "Prefiro produtos da Apple").
+                  </p>
+                )}
+              </div>
+
+              {/* Interesses / Foco */}
+              <div className="p-3 rounded-xl bg-zinc-900/70 border border-zinc-800/80 space-y-2">
+                <div className="text-zinc-400 flex items-center gap-1.5 font-medium">
+                  <Tag className="h-4 w-4 text-cyan-400" /> Foco de Uso & Interesses:
+                </div>
+                {userProfile.interesses.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {userProfile.interesses.map((interesse, i) => (
+                      <span
+                        key={i}
+                        className="px-2.5 py-0.5 rounded-md bg-cyan-950/80 text-cyan-300 border border-cyan-800/60 text-xs font-medium"
+                      >
+                        {interesse}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-zinc-500 text-xs">
+                    Nenhum foco registrado ainda (ex: "Sou programador" ou "Gosto de jogos").
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between gap-3">
+              <button
+                onClick={handleResetProfile}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-rose-400 hover:text-rose-300 bg-rose-950/40 hover:bg-rose-950/70 border border-rose-800/50 transition"
+              >
+                Resetar Perfil
+              </button>
+              <button
+                onClick={() => setShowProfileModal(false)}
+                className="px-4 py-1.5 rounded-lg text-xs font-semibold text-black bg-cyan-400 hover:bg-cyan-300 transition"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Chat Container */}
       <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 scroll-smooth">

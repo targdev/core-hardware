@@ -20,6 +20,7 @@ from app.inventory import (
     consultar_estoque,
     listar_produtos,
 )
+from app.models import UserProfile
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -37,6 +38,8 @@ Suas diretrizes fundamentais:
 8. CONVERSA PROCEDURAL E MEMÓRIA DE CONTEXTO:
    - Mantenha continuidade natural do diálogo. Se o cliente fizer perguntas complementares usando pronomes ou elipses (ex: "E quanto custa?", "Qual a cor dele?", "E a bateria?", "Tem garantia?"), recupere o produto em discussão do histórico recente e responda de forma conectada.
    - Conduza o atendimento de forma consultiva, sugerindo comparações ou acessórios complementares quando for oportuno.
+9. MEMÓRIA DE DADOS PESSOAIS E PREFERÊNCIAS DO CLIENTE:
+   - Se o cliente informar seu nome, cidade, email, marcas favoritas ou interesses de uso (ex: "Meu nome é Tarcísio", "prefiro Apple", "sou programador", "foco gamer"), memorize esses dados, cumprimente-o cordialmente pelo nome e adapte recomendações ao seu perfil.
 """
 
 TOOL_MAP = {
@@ -234,12 +237,232 @@ def _formatar_preco_br(preco: float) -> str:
     return f"R$ {formatado}"
 
 
+def _gerar_prompt_com_perfil(perfil: Optional[UserProfile]) -> str:
+    """Anexa dados e preferências do perfil do cliente ao system prompt."""
+    if not perfil:
+        return SYSTEM_PROMPT
+
+    itens = []
+    if perfil.nome:
+        itens.append(f"Nome do cliente: {perfil.nome}")
+    if perfil.email:
+        itens.append(f"E-mail: {perfil.email}")
+    if perfil.cidade:
+        itens.append(f"Cidade/Região: {perfil.cidade}")
+    if perfil.marcas_favoritas:
+        itens.append(f"Marcas preferidas: {', '.join(perfil.marcas_favoritas)}")
+    if perfil.interesses:
+        itens.append(f"Áreas de interesse / foco de uso: {', '.join(perfil.interesses)}")
+
+    if not itens:
+        return SYSTEM_PROMPT
+
+    bloco_perfil = (
+        "\n\n[DADOS E PREFERÊNCIAS MEMORIZADAS DO CLIENTE]:\n"
+        + "\n".join(f"- {item}" for item in itens)
+        + "\nDiretriz de Relacionamento: Chame o cliente cordialmente pelo nome e adapte sugestões e periféricos às suas marcas e interesses declarados."
+    )
+    return SYSTEM_PROMPT + bloco_perfil
+
+
+def extrair_e_atualizar_perfil(
+    message: str, current_profile: Optional[UserProfile] = None
+) -> Tuple[UserProfile, Dict[str, Any]]:
+    """Identifica dados pessoais, marcas favoritas e preferências de uso do cliente na mensagem."""
+    perfil = current_profile.model_copy() if current_profile else UserProfile()
+    novos_dados: Dict[str, Any] = {}
+    msg_raw = message.strip()
+    msg_lower = msg_raw.lower()
+
+    # 1. Extração de Nome
+    padroes_nome = [
+        r"(?:meu nome é|meu nome e)\s+([a-zA-ZÀ-ÿ]+(?:\s+[a-zA-ZÀ-ÿ]+)?)",
+        r"(?:me chamo)\s+([a-zA-ZÀ-ÿ]+(?:\s+[a-zA-ZÀ-ÿ]+)?)",
+        r"(?:pode me chamar de)\s+([a-zA-ZÀ-ÿ]+(?:\s+[a-zA-ZÀ-ÿ]+)?)",
+        r"(?:sou o|sou a)\s+([a-zA-ZÀ-ÿ]+(?:\s+[a-zA-ZÀ-ÿ]+)?)",
+        r"(?:aqui é o|aqui é a)\s+([a-zA-ZÀ-ÿ]+(?:\s+[a-zA-ZÀ-ÿ]+)?)",
+    ]
+    for padrao in padroes_nome:
+        match = re.search(padrao, msg_raw, re.IGNORECASE)
+        if match:
+            candidato = match.group(1).strip()
+            candidato = re.sub(r"[^\w\sÀ-ÿ]", "", candidato).strip()
+            palavras_invalidas = {"um", "uma", "cliente", "novo", "aqui", "cara", "amigo", "de", "boa"}
+            if candidato and candidato.lower() not in palavras_invalidas and len(candidato) >= 2:
+                nome_formatado = " ".join(p.capitalize() for p in candidato.split())
+                perfil.nome = nome_formatado
+                novos_dados["nome"] = nome_formatado
+                break
+
+    # 2. Extração de Email
+    match_email = re.search(r"([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)", msg_raw)
+    if match_email:
+        email = match_email.group(1).strip().lower()
+        perfil.email = email
+        novos_dados["email"] = email
+
+    # 3. Extração de Cidade / Localização
+    padroes_cidade = [
+        r"(?:moro em|sou de|vivo em|resido em|falo de|aqui em)\s+([a-zA-ZÀ-ÿ]+(?:\s+[a-zA-ZÀ-ÿ]+)?)",
+    ]
+    for padrao in padroes_cidade:
+        match = re.search(padrao, msg_raw, re.IGNORECASE)
+        if match:
+            cid = match.group(1).strip()
+            cid = re.sub(r"[^\w\sÀ-ÿ]", "", cid).strip()
+            palavras_inv = {"casa", "paz", "boa", "desconto", "são", "sp", "um", "uma", "aqui"}
+            if cid and cid.lower() not in palavras_inv and len(cid) >= 3:
+                cid_formatada = " ".join(p.capitalize() for p in cid.split())
+                perfil.cidade = cid_formatada
+                novos_dados["cidade"] = cid_formatada
+                break
+
+    # 4. Marcas Favoritas
+    marcas_conhecidas = {
+        "apple": "Apple",
+        "macbook": "Apple",
+        "mac": "Apple",
+        "dell": "Dell",
+        "alienware": "Dell",
+        "lenovo": "Lenovo",
+        "legion": "Lenovo",
+        "thinkpad": "Lenovo",
+        "logitech": "Logitech",
+        "logi": "Logitech",
+        "keychron": "Keychron",
+        "nvidia": "Nvidia",
+        "geforce": "Nvidia",
+        "rtx": "Nvidia",
+    }
+    indicadores_marca = ["gosto de", "gosto da", "gosto do", "prefiro", "fã da", "fã de", "marca", "marcas", "adoro", "sempre uso", "só uso", "quero da", "quero de"]
+    menciona_preferencia = any(ind in msg_lower for ind in indicadores_marca)
+
+    marcas_adicionadas = []
+    for chave, marca in marcas_conhecidas.items():
+        if re.search(rf"\b{chave}\b", msg_lower):
+            if menciona_preferencia or any(f"{ind} {chave}" in msg_lower for ind in ["gosto de", "gosto da", "prefiro", "marca"]):
+                if marca not in perfil.marcas_favoritas:
+                    perfil.marcas_favoritas.append(marca)
+                    marcas_adicionadas.append(marca)
+    if marcas_adicionadas:
+        novos_dados["marcas_favoritas"] = marcas_adicionadas
+
+    # 5. Áreas de Interesse / Foco de Uso
+    interesses_mapeados = {
+        ("programacao", "programação", "programador", "programadora", "dev", "desenvolvedor", "desenvolvedora", "codigo", "código", "software", "programar"): "Programação & Desenvolvimento",
+        ("gamer", "jogos", "jogar", "games", "jogo", "fps", "cyberpunk", "warzone", "jogando"): "Games & Alta Performance",
+        ("design", "designer", "edicao", "edição", "video", "vídeo", "render", "photoshop", "premiere", "3d", "artes", "foto", "fotografia"): "Design & Criação Visual",
+        ("produtividade", "escritorio", "escritório", "home office", "trabalho", "estudos", "planilhas", "estudar"): "Produtividade & Home Office",
+        ("sem fio", "wireless", "bluetooth"): "Periféricos Sem Fio",
+    }
+    interesses_adicionados = []
+    for termos, interesse in interesses_mapeados.items():
+        if any(termo in msg_lower for termo in termos):
+            if interesse not in perfil.interesses:
+                perfil.interesses.append(interesse)
+                interesses_adicionados.append(interesse)
+    if interesses_adicionados:
+        novos_dados["interesses"] = interesses_adicionados
+
+    return perfil, novos_dados
+
+
 def _executar_fallback_deterministico(
-    message: str, history: Optional[List[Dict[str, str]]] = None
-) -> Tuple[str, List[str], Optional[Dict[str, Any]]]:
+    message: str,
+    history: Optional[List[Dict[str, str]]] = None,
+    user_profile: Optional[UserProfile] = None,
+) -> Tuple[str, List[str], Optional[Dict[str, Any]], UserProfile]:
     """Fallback conversacional empático e resiliente para quando nenhuma API estiver com chave configurada."""
     msg_lower = message.lower().strip()
     tools_called: List[str] = []
+
+    # Extrair e atualizar perfil com dados pessoais ou preferências declaradas nesta mensagem
+    perfil, novos_dados = extrair_e_atualizar_perfil(message, user_profile)
+    saudacao_nome = f", **{perfil.nome}**" if perfil.nome else ""
+
+    # Caso Perfil 1: Usuário perguntando sobre o que a IA sabe sobre ele / seus dados
+    intencoes_perfil = [
+        "qual meu nome", "qual o meu nome", "sabe meu nome", "lembra de mim",
+        "minhas preferencias", "minhas preferências", "o que voce sabe sobre mim",
+        "o que você sabe sobre mim", "meus dados", "meu perfil", "lembra meu nome"
+    ]
+    if any(p in msg_lower for p in intencoes_perfil):
+        if perfil.nome:
+            marcas_txt = ", ".join(perfil.marcas_favoritas) if perfil.marcas_favoritas else "Nenhuma marca registrada ainda"
+            interesses_txt = ", ".join(perfil.interesses) if perfil.interesses else "Nenhum interesse registrado ainda"
+            cidade_txt = perfil.cidade or "Não informada"
+            email_txt = perfil.email or "Não informado"
+            reply = (
+                f"Com certeza{saudacao_nome}! Aqui estão os dados e preferências salvos no seu perfil da **CORE Hardware**:\n\n"
+                f"• 👤 **Nome:** {perfil.nome}\n"
+                f"• 🏷️ **Marcas Favoritas:** {marcas_txt}\n"
+                f"• 🎯 **Áreas de Foco:** {interesses_txt}\n"
+                f"• 📍 **Localização:** {cidade_txt}\n"
+                f"• ✉️ **E-mail:** {email_txt}\n\n"
+                "Essas informações personalizam todas as nossas recomendações de hardware para você!"
+            )
+        else:
+            reply = (
+                "Ainda não registrei seu nome ou preferências! Você pode me dizer como se chama (ex: *'Meu nome é Tarcísio'*) "
+                "e quais marcas ou tipos de uso você prefere (ex: *'Gosto da Apple e trabalho com programação'*)."
+            )
+        return reply, tools_called, None, perfil
+
+    # Caso Perfil 2: Usuário acabou de se apresentar com o nome (Ex: 'Meu nome é Tarcísio')
+    if "nome" in novos_dados:
+        reply = (
+            f"Muito prazer, **{perfil.nome}**! Seja muito bem-vindo à **CORE Hardware**.\n\n"
+            f"Já registrei seu nome e perfil de atendimento aqui no sistema. Como posso te ajudar hoje? "
+            f"Posso consultar o estoque em tempo real de notebooks de alta performance, monitores 4K, GPUs ou periféricos, além de gerar comparativos técnicos!"
+        )
+        return reply, tools_called, None, perfil
+
+    # Caso Perfil 3: Usuário declarou preferências de marca (Ex: 'Prefiro produtos da Apple' / 'Gosto de Logitech')
+    if "marcas_favoritas" in novos_dados and not _encontrar_produto_aproximado(message):
+        marcas_str = " e ".join(novos_dados["marcas_favoritas"])
+        linhas = [
+            f"Excelente escolha{saudacao_nome}! Registrei **{marcas_str}** nas suas marcas favoritas.\n"
+        ]
+        if "Apple" in novos_dados["marcas_favoritas"]:
+            linhas.append(
+                "• **No ecossistema Apple:** Temos o **MacBook Air 15\" M3** (4 unidades disponíveis por R$ 11.999,00), "
+                "além de total compatibilidade com o **Mouse Logitech MX Master 3S** e **Teclado Keychron K2 Pro**."
+            )
+        if "Dell" in novos_dados["marcas_favoritas"]:
+            linhas.append(
+                "• **Da Dell:** Temos o sofisticado **Dell XPS 13 Plus** com tela 3.5K OLED (2 unidades por R$ 10.850,00) "
+                "e o **Monitor Dell UltraSharp 27\" 4K** IPS Black com hub USB-C de 90W (5 unidades por R$ 3.790,00)."
+            )
+        if "Lenovo" in novos_dados["marcas_favoritas"]:
+            linhas.append(
+                "• **Da Lenovo:** Trabalhamos com o **Lenovo Legion Pro 5** (atualmente esgotado em estoque, com preço de tabela em R$ 9.400,00)."
+            )
+        if "Logitech" in novos_dados["marcas_favoritas"]:
+            linhas.append(
+                "• **Da Logitech:** Temos o renomado **Mouse Logitech MX Master 3S** (11 unidades por R$ 650,00), referência global em ergonomia e precisão."
+            )
+        if "Keychron" in novos_dados["marcas_favoritas"]:
+            linhas.append(
+                "• **Da Keychron:** Temos o **Teclado Mecânico Keychron K2 Pro** sem fio com switches Red (6 unidades por R$ 780,00)."
+            )
+        if "Nvidia" in novos_dados["marcas_favoritas"]:
+            linhas.append(
+                "• **Da Nvidia:** Temos a **GeForce RTX 4060 Ti 8GB** com DLSS 3 e Ray Tracing (3 unidades por R$ 2.650,00)."
+            )
+        linhas.append("\nGostaria de consultar detalhes, estoque ou ver um comparativo dessas opções?")
+        return "\n".join(linhas), ["consultar_estoque"], None, perfil
+
+    # Caso Perfil 4: Usuário declarou área de interesse / perfil de uso (Ex: 'Trabalho com programação' / 'Sou gamer')
+    if "interesses" in novos_dados and not _encontrar_produto_aproximado(message):
+        interesses_str = " e ".join(novos_dados["interesses"])
+        reply = (
+            f"Perfeito{saudacao_nome}! Salvei **{interesses_str}** no seu perfil.\n\n"
+            "Com base no seu objetivo, nossos consultores recomendam:\n"
+            "• **Notebooks de Alta Performance:** MacBook Air 15\" M3 (eficiência e bateria) ou Dell XPS 13 Plus (tela OLED 3.5K e 32GB RAM).\n"
+            "• **Periféricos de Precisão:** Teclado Keychron K2 Pro e Mouse Logitech MX Master 3S para máxima produtividade e conforto ergonômico.\n\n"
+            "Gostaria de ver um comparativo técnico ou checar os preços e quantidades em estoque?"
+        )
+        return reply, ["listar_produtos"], None, perfil
 
     # Verificar se a mensagem ativa um mini dashboard de comparação pré-montado
     dashboard = obter_dashboard_benchmarks(message)
@@ -264,7 +487,7 @@ def _executar_fallback_deterministico(
             "   • **Status:** Atualmente esgotado em estoque (0 unidades).\n\n"
             "👉 **Consulte os gráficos interativos de benchmark e telemetria gerados no painel acima!**"
         )
-        return reply, tools_called, dashboard
+        return reply, tools_called, dashboard, perfil
 
     # 2. Benchmark da GPU RTX 4060 Ti
     if dashboard and dashboard.get("tipo") == "benchmark_gpu":
@@ -280,7 +503,7 @@ def _executar_fallback_deterministico(
             "• **Destaque:** Suporte nativo a Ray Tracing e DLSS 3 Frame Generation.\n\n"
             "👉 **Confira as métricas completas no mini dashboard interativo anexado.**"
         )
-        return reply, tools_called, dashboard
+        return reply, tools_called, dashboard, perfil
 
     # 3. Setup de Periféricos
     if dashboard and dashboard.get("tipo") == "comparativo_perifericos":
@@ -297,7 +520,7 @@ def _executar_fallback_deterministico(
             "  - Conexão sem fio para até 3 dispositivos simultâneos (Mac e Windows).\n\n"
             "Juntos compõem a estação de trabalho definitiva para desenvolvimento e produtividade!"
         )
-        return reply, tools_called, dashboard
+        return reply, tools_called, dashboard, perfil
 
     # 4. Monitor Dell UltraSharp 4K
     if dashboard and dashboard.get("tipo") == "analise_monitor":
@@ -310,16 +533,17 @@ def _executar_fallback_deterministico(
             "• **Produtividade:** Hub USB-C embutido que recarrega notebooks com até 90W e transmite vídeo/dados em 1 único cabo.\n"
             "• **Ajustes:** Suporte ergonômico completo (altura, inclinação, rotação e pivô 90°)."
         )
-        return reply, tools_called, dashboard
+        return reply, tools_called, dashboard, perfil
 
     # 5. Saudações puras
     saudacoes = ["ola", "olá", "oi", "bom dia", "boa tarde", "boa noite", "hey", "hello", "opa"]
     if msg_lower in saudacoes or any(msg_lower.startswith(s) and len(msg_lower) <= len(s) + 4 for s in saudacoes):
         return (
-            "Olá! Seja muito bem-vindo à **CORE Hardware**. Sou o assistente oficial especializado em hardware e equipamentos de alto desempenho.\n\n"
+            f"Olá{saudacao_nome}! Seja muito bem-vindo à **CORE Hardware**. Sou o assistente oficial especializado em hardware e equipamentos de alto desempenho.\n\n"
             "Como posso ajudar você hoje? Posso consultar nosso estoque em tempo real, informar especificações ou gerar comparativos de notebooks, periféricos, monitores 4K e GPUs!",
             [],
             None,
+            perfil,
         )
 
     # 6. Catálogo Geral
@@ -330,13 +554,13 @@ def _executar_fallback_deterministico(
     if any(frase in msg_lower for frase in intencoes_catalogo):
         tools_called.append("listar_produtos")
         todos = listar_produtos()
-        linhas = ["Aqui está o nosso catálogo oficial da **CORE Hardware**:\n"]
+        linhas = [f"Aqui está o nosso catálogo oficial da **CORE Hardware**{saudacao_nome}:\n"]
         for p in todos:
             status_txt = "Disponível" if p["estoque"] > 0 else "Esgotado"
             linhas.append(
                 f"- **{p['nome']}** ({p['categoria']}): R$ {p['preco']:,.2f} | Estoque: {p['estoque']} un. [{status_txt}]"
             )
-        return "\n".join(linhas), tools_called, None
+        return "\n".join(linhas), tools_called, None, perfil
 
     # 7. Busca Inteligente por Produto (com Fuzzy Matching / tolerância a typos)
     item_aproximado = _encontrar_produto_aproximado(message)
@@ -363,7 +587,7 @@ def _executar_fallback_deterministico(
                     f"• **Preço unitário:** {_formatar_preco_br(preco)}\n\n"
                     "Gostaria de tirar alguma dúvida sobre as especificações técnicas ou ver um comparativo?"
                 )
-            return reply, tools_called, dashboard
+            return reply, tools_called, dashboard, perfil
 
     # 8. Diálogo Procedural e Memória de Contexto do Histórico
     produto_contexto = _recuperar_produto_do_historico(history)
@@ -399,7 +623,7 @@ def _executar_fallback_deterministico(
                         f"• **Disponibilidade:** Temos {estoque} unidades em estoque a pronta entrega.\n\n"
                         f"Gostaria de consultar as opções de entrega ou tirar mais dúvidas sobre o modelo?"
                     )
-                return reply, tools_called, dashboard
+                return reply, tools_called, dashboard, perfil
 
             # Caso B: Pergunta sobre Cor / Design / Acabamento
             termos_cor = ["cor", "cores", "acabamento", "design", "preto", "cinza", "prata", "grafite"]
@@ -410,7 +634,7 @@ def _executar_fallback_deterministico(
                     f"O acabamento foi desenvolvido visando máxima durabilidade e sofisticação. "
                     f"Deseja saber mais sobre as especificações ou disponibilidade deste modelo?"
                 )
-                return reply, tools_called, dashboard
+                return reply, tools_called, dashboard, perfil
 
             # Caso C: Pergunta sobre Bateria / Autonomia / Energia / TDP / Fonte
             termos_bateria = ["bateria", "autonomia", "carregador", "dura", "duracao", "duração", "carga", "consumo", "tdp", "fonte"]
@@ -420,7 +644,7 @@ def _executar_fallback_deterministico(
                     f"• **Bateria & Alimentação:** {bateria_info}.\n\n"
                     f"Excelente eficiência para seu fluxo de trabalho. Posso te ajudar com alguma outra especificação técnica ou estoque?"
                 )
-                return reply, tools_called, dashboard
+                return reply, tools_called, dashboard, perfil
 
             # Caso D: Pergunta sobre Garantia / Nota Fiscal / Suporte
             termos_garantia = ["garantia", "suporte", "nota", "fiscal", "nf", "original", "seguro"]
@@ -430,7 +654,7 @@ def _executar_fallback_deterministico(
                     f"Todos os nossos envios na **CORE Hardware** contam com nota fiscal emitida no seu nome, rastreamento seguro e canal direto de suporte pós-venda. "
                     f"Deseja verificar formas de pagamento ou prazo de entrega?"
                 )
-                return reply, tools_called, dashboard
+                return reply, tools_called, dashboard, perfil
 
             # Caso E: Pergunta sobre Estoque / Unidades Disponíveis / Envio
             termos_estoque = ["estoque", "quantos", "quantas", "tem pronta", "pronta entrega", "frete", "entrega", "envio", "prazo"]
@@ -447,7 +671,7 @@ def _executar_fallback_deterministico(
                         f"O valor unitário é **{_formatar_preco_br(preco)}** com despacho em até 24h úteis para todo o Brasil. "
                         f"Gostaria de garantir o seu?"
                     )
-                return reply, tools_called, dashboard
+                return reply, tools_called, dashboard, perfil
 
             # Caso F: Pergunta sobre Especificações / Configuração / Processador / Memória
             termos_specs = ["especificacao", "especificacoes", "especificação", "especificações", "specs", "configuracao", "configuração", "config", "memoria", "memória", "ram", "ssd", "processador", "cpu", "tela", "display"]
@@ -460,7 +684,7 @@ def _executar_fallback_deterministico(
                 if sugeridos:
                     reply += f"💡 **Sugestão Consultiva:** Este item combina perfeitamente com {sugeridos}.\n\n"
                 reply += "Deseja ver opções de pagamento ou consultar o estoque?"
-                return reply, tools_called, dashboard
+                return reply, tools_called, dashboard, perfil
 
             # Caso G: Diálogo Procedural Geral / Pronome anafórico ("ele", "dele", "gostei", "fale mais")
             termos_anaforicos = ["ele", "dele", "nele", "esse", "este", "desse", "deste", "gostei", "quero", "detalhe", "detalhes", "mais sobre"]
@@ -476,7 +700,7 @@ def _executar_fallback_deterministico(
                 if sugeridos:
                     reply += f"💡 **Sugestão Consultiva CORE Hardware:** Para completar sua experiência, recomendamos o {sugeridos}.\n\n"
                 reply += "Gostaria de saber algo específico sobre ele ou finalizar a compra?"
-                return reply, tools_called, dashboard
+                return reply, tools_called, dashboard, perfil
 
     # 9. Resposta conversacional natural quando o item não for identificado
     tools_called.append("consultar_estoque")
@@ -489,6 +713,7 @@ def _executar_fallback_deterministico(
         "Gostaria de consultar disponibilidade, valores ou ver um comparativo de algum desses itens?",
         tools_called,
         None,
+        perfil,
     )
 
 
@@ -522,14 +747,18 @@ class AIService:
         return len(chave_clean) > 8
 
     def _processar_via_grok(
-        self, message: str, history: Optional[List[Dict[str, str]]] = None
+        self,
+        message: str,
+        history: Optional[List[Dict[str, str]]] = None,
+        user_profile: Optional[UserProfile] = None,
     ) -> Optional[Tuple[str, List[str]]]:
         """Executa a conversação via Grok (xAI API) com Function/Tool Calling."""
         if not self._tem_chave_valida(self.grok_api_key):
             return None
 
         tools_called: List[str] = []
-        messages: List[Dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        system_content = _gerar_prompt_com_perfil(user_profile)
+        messages: List[Dict[str, Any]] = [{"role": "system", "content": system_content}]
 
         if history:
             for h in history:
@@ -590,7 +819,10 @@ class AIService:
             return msg_obj.get("content", ""), tools_called
 
     def _processar_via_gemini(
-        self, message: str, history: Optional[List[Dict[str, str]]] = None
+        self,
+        message: str,
+        history: Optional[List[Dict[str, str]]] = None,
+        user_profile: Optional[UserProfile] = None,
     ) -> Optional[Tuple[str, List[str]]]:
         """Executa a conversação via Google GenAI com Tool Calling."""
         if not self._tem_chave_valida(self.gemini_api_key):
@@ -603,8 +835,9 @@ class AIService:
             client = genai.Client(api_key=self.gemini_api_key.strip())
             tools_called: List[str] = []
 
+            system_content = _gerar_prompt_com_perfil(user_profile)
             config = types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
+                system_instruction=system_content,
                 tools=[consultar_estoque, listar_produtos],
                 temperature=0.2,
             )
@@ -670,6 +903,7 @@ class AIService:
         message: str,
         history: Optional[List[Dict[str, str]]] = None,
         provider: Optional[str] = "auto",
+        user_profile: Optional[UserProfile] = None,
     ) -> Dict[str, Any]:
         """Prioriza estritamente os modelos de IA (Grok e Gemini) antes de qualquer fallback."""
         # Recarregar chaves de ambiente caso o usuário tenha editado o .env
@@ -678,10 +912,13 @@ class AIService:
         dashboard_data = obter_dashboard_benchmarks(message)
         provedor_preferido = (provider or os.getenv("LLM_PROVIDER", "auto")).lower()
 
+        # Extrair e atualizar perfil preliminarmente caso o usuário tenha fornecido novos dados
+        perfil_atualizado, _ = extrair_e_atualizar_perfil(message, user_profile)
+
         # 1. Prioridade 1: Grok (xAI) se solicitado ou se estiver com chave disponível no modo auto
         if provedor_preferido in ("grok", "xai") or (provedor_preferido == "auto" and self._tem_chave_valida(self.grok_api_key)):
             try:
-                res_grok = self._processar_via_grok(message, history)
+                res_grok = self._processar_via_grok(message, history, perfil_atualizado)
                 if res_grok:
                     reply, tools = res_grok
                     return {
@@ -689,6 +926,7 @@ class AIService:
                         "tools_called": tools,
                         "dashboard_data": dashboard_data,
                         "provider": "grok",
+                        "user_profile": perfil_atualizado,
                     }
             except Exception as e:
                 logger.warning("Erro ao tentar Grok como IA principal: %s", e)
@@ -696,7 +934,7 @@ class AIService:
         # 2. Prioridade 2: Google Gemini se solicitado ou se estiver com chave disponível no modo auto
         if provedor_preferido in ("gemini", "google") or (provedor_preferido == "auto" and self._tem_chave_valida(self.gemini_api_key)):
             try:
-                res_gemini = self._processar_via_gemini(message, history)
+                res_gemini = self._processar_via_gemini(message, history, perfil_atualizado)
                 if res_gemini:
                     reply, tools = res_gemini
                     return {
@@ -704,18 +942,20 @@ class AIService:
                         "tools_called": tools,
                         "dashboard_data": dashboard_data,
                         "provider": "gemini",
+                        "user_profile": perfil_atualizado,
                     }
             except Exception as e:
                 logger.warning("Erro ao tentar Gemini como IA principal: %s", e)
 
         # 3. Fallback inteligente de contingência (ativo somente se nenhuma IA responder ou estiver sem chaves)
-        reply, tools, dash = _executar_fallback_deterministico(message, history)
+        reply, tools, dash, perfil_final = _executar_fallback_deterministico(message, history, user_profile)
         final_dashboard = dashboard_data or dash
         return {
             "reply": reply,
             "tools_called": tools,
             "dashboard_data": final_dashboard,
             "provider": "fallback_core",
+            "user_profile": perfil_final,
         }
 
 

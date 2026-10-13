@@ -13,6 +13,26 @@ class ChatMessage(BaseModel):
     content: str = Field(..., min_length=1, description="Conteúdo textual da mensagem")
 
 
+class UserProfile(BaseModel):
+    """Dados cadastrais e preferências identificadas do cliente."""
+
+    nome: Optional[str] = Field(default=None, description="Nome do cliente")
+    email: Optional[str] = Field(default=None, description="E-mail de contato")
+    cidade: Optional[str] = Field(default=None, description="Cidade ou estado do cliente")
+    marcas_favoritas: List[str] = Field(
+        default_factory=list,
+        description="Marcas de preferência (ex: Apple, Dell, Lenovo, Logitech, Keychron, Nvidia)",
+    )
+    interesses: List[str] = Field(
+        default_factory=list,
+        description="Áreas de interesse e foco de uso (ex: Programação, Games, Produtividade)",
+    )
+    notas: List[str] = Field(
+        default_factory=list,
+        description="Outras preferências e dados capturados durante o atendimento",
+    )
+
+
 class ChatRequest(BaseModel):
     """Payload de entrada para o endpoint de chat."""
 
@@ -30,10 +50,14 @@ class ChatRequest(BaseModel):
         default="auto",
         description="Provedor de IA desejado: 'grok', 'gemini' ou 'auto'",
     )
+    user_profile: Optional[UserProfile] = Field(
+        default=None,
+        description="Perfil e preferências do cliente previamente salvos",
+    )
 
 
 class ChatResponse(BaseModel):
-    """Payload de saída do endpoint de chat com dados de dashboard opcionais."""
+    """Payload de saída do endpoint de chat com dados de dashboard e perfil do cliente."""
 
     reply: str = Field(
         ...,
@@ -51,4 +75,8 @@ class ChatResponse(BaseModel):
     provider: str = Field(
         default="fallback_core",
         description="Provedor de inteligência artificial que atendeu a requisição ('grok', 'gemini' ou 'fallback_core')",
+    )
+    user_profile: Optional[UserProfile] = Field(
+        default=None,
+        description="Perfil e preferências atualizados do cliente",
     )

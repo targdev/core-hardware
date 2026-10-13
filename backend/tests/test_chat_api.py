@@ -143,3 +143,73 @@ def test_procedural_dialog_follow_up_warranty():
     assert "nota fiscal" in data["reply"].lower()
     assert "consultar_estoque" in data["tools_called"]
 
+
+def test_user_profile_introduction_greeting():
+    """Valida identificação do nome do usuário e persistência no perfil."""
+    payload = {
+        "message": "Meu nome é Tarcísio",
+        "history": [],
+    }
+    response = client.post("/api/chat", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "Tarcísio" in data["reply"]
+    assert "Muito prazer" in data["reply"] or "prazer" in data["reply"].lower()
+    assert data["user_profile"] is not None
+    assert data["user_profile"]["nome"] == "Tarcísio"
+
+
+def test_user_profile_brand_preference_and_recommendation():
+    """Valida captura de marcas favoritas e recomendação contextual."""
+    payload = {
+        "message": "Prefiro produtos da Apple",
+        "history": [],
+        "user_profile": {"nome": "Tarcísio", "marcas_favoritas": [], "interesses": []},
+    }
+    response = client.post("/api/chat", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "Apple" in data["reply"]
+    assert "MacBook Air" in data["reply"]
+    assert data["user_profile"] is not None
+    assert "Apple" in data["user_profile"]["marcas_favoritas"]
+    assert data["user_profile"]["nome"] == "Tarcísio"
+
+
+def test_user_profile_interests_and_city():
+    """Valida captura de interesse em programação e cidade."""
+    payload = {
+        "message": "Trabalho com programação e moro em Curitiba",
+        "history": [],
+        "user_profile": {"nome": "Tarcísio", "marcas_favoritas": ["Apple"], "interesses": []},
+    }
+    response = client.post("/api/chat", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["user_profile"] is not None
+    assert data["user_profile"]["cidade"] == "Curitiba"
+    assert "Programação & Desenvolvimento" in data["user_profile"]["interesses"]
+    assert "Apple" in data["user_profile"]["marcas_favoritas"]
+
+
+def test_user_profile_query_what_do_you_know_about_me():
+    """Valida consulta das preferências e dados memorizados do usuário."""
+    payload = {
+        "message": "O que você sabe sobre mim?",
+        "history": [],
+        "user_profile": {
+            "nome": "Tarcísio",
+            "cidade": "Curitiba",
+            "marcas_favoritas": ["Apple", "Logitech"],
+            "interesses": ["Programação & Desenvolvimento"],
+        },
+    }
+    response = client.post("/api/chat", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "Tarcísio" in data["reply"]
+    assert "Apple" in data["reply"]
+    assert "Logitech" in data["reply"]
+    assert "Curitiba" in data["reply"]
+
+
