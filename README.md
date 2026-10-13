@@ -153,9 +153,20 @@ A aplicação possui 3 suítes de testes cobrindo 100% dos requisitos funcionais
 
 ---
 
+## 🎯 Checklist do Desafio Atendido
+
+- [x] **Tela simples de chat:** Interface web moderna e ágil para conversar naturalmente com o bot.
+- [x] **Perguntas de estoque e quantidade:** Responde com precisão a "tem o produto x?" e "tem quantos?" (ex: MacBook Air 15" M3, Dell XPS, Lenovo Legion, MX Master 3S, Keychron K2, RTX 4060 Ti).
+- [x] **IA com Tool Calling e chave própria:** Conecta diretamente com **Grok (xAI)** e **Google Gemini** consultando ferramentas de estoque em tempo real.
+- [x] **Memória persistente de diálogo & preferências:** Lembra do nome do cliente, marcas favoritas, histórico de perguntas e encadeia respostas afirmativas ("Sim", "Quero") sem reiniciar o contexto.
+- [x] **README direto dizendo como rodar:** Guia simples e objetivo de execução para backend, frontend e variáveis de ambiente.
+- [x] **Testes automáticos em Python:** 24 testes unitários e de integração com `pytest` cobrindo regras de negócio, IA, estoque e diálogo.
+
+---
+
 ## 🌲 Disciplina de Git & Branches
 
-O projeto segue rigorosamente o fluxo de branches atômicas e merges sem fast-forward (`--no-ff`):
+O projeto segue rigorosamente o fluxo de branches atômicas e merges organizados:
 
 ```text
 main (estável / produção)
@@ -174,5 +185,6 @@ main (estável / produção)
         ├── task/CORE-25-clean-ui-remove-technical-tools
         ├── task/CORE-26-enrich-readme-instructions
         ├── task/CORE-27-ai-priority-and-fuzzy-intelligence
-        └── task/CORE-28-localstorage-memory-and-procedural-dialog
+        ├── task/CORE-28-localstorage-memory-and-procedural-dialog
+        └── task/CORE-29-user-profile-and-preferences-memory
 ```
