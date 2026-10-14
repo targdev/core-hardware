@@ -114,7 +114,7 @@ export default function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const API_BASE_URL = 'http://localhost:8000';
+  const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
 
   // Persistir histórico de mensagens no localStorage para memória conversacional contínua
   useEffect(() => {
@@ -225,7 +225,8 @@ export default function App() {
         role: 'assistant',
         content:
           `⚠️ Não foi possível conectar ao backend (${errorMessage}).\n` +
-          'Certifique-se de que a API FastAPI está em execução na porta 8000 (`uvicorn app.main:app --port 8000`).',
+          `Endpoint configurado: \`${API_BASE_URL}\`\n\n` +
+          'Certifique-se de que o backend FastAPI está em execução e acessível.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, fallbackErrorMsg]);

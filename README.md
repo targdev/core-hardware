@@ -82,13 +82,26 @@ GEMINI_API_KEY=AIzaSySuaChaveDoGeminiAqui
 GEMINI_MODEL=gemini-2.5-flash
 ```
 
-#### No Deploy na Vercel:
-Ao subir o projeto para a **Vercel**, configure as variáveis de ambiente com segurança no painel:
-1. Acesse seu projeto na Vercel e navegue até **Settings** > **Environment Variables**.
-2. Adicione as chaves:
-   - `GEMINI_API_KEY` (ou `XAI_API_KEY`) com o valor da chave obtida no passo a passo acima.
-   - `LLM_PROVIDER`: `auto` (ou `gemini` / `grok`).
-3. Clique em **Save** e faça o redeploy.
+#### No Deploy na Vercel (Frontend e Backend Separados):
+
+Como o projeto possui Frontend (React/Vite) e Backend (FastAPI), o recomendado na Vercel é criar **dois projetos a partir do mesmo repositório do GitHub**:
+
+1. **Projeto 1: Backend (FastAPI)**
+   - No painel da Vercel, clique em **Add New... > Project** e selecione o repositório.
+   - Em **Root Directory**, clique em Edit e selecione a pasta: `backend`.
+   - Em **Environment Variables**, adicione:
+     - `GEMINI_API_KEY` (ou `XAI_API_KEY`) com sua chave.
+     - `LLM_PROVIDER`: `gemini` (ou `auto` / `grok`).
+   - Clique em **Deploy**. O projeto já conta com [`backend/vercel.json`](file:///D:/Empresa/core-hardware/backend/vercel.json) e [`backend/api/index.py`](file:///D:/Empresa/core-hardware/backend/api/index.py) configurados para serverless.
+   - Ao finalizar, copie a URL gerada pela Vercel para o backend (ex: `https://core-hardware-api.vercel.app`).
+
+2. **Projeto 2: Frontend (React / Vite)**
+   - No painel da Vercel, crie um segundo projeto a partir do mesmo repositório.
+   - Em **Root Directory**, selecione a pasta: `frontend`.
+   - Em **Environment Variables**, adicione a variável que aponta para o backend:
+     - **Key:** `VITE_API_BASE_URL`
+     - **Value:** `https://core-hardware-api.vercel.app` *(a URL do seu backend gerada no Passo 1)*
+   - Clique em **Deploy** (ou faça um Redeploy se o frontend já estiver criado). O Vite injetará automaticamente a URL da API em tempo de build!
 
 > **Hierarquia de Execução & Resiliência:**
 > - **IA Principal Obrigatória (Grok / Gemini):** Toda mensagem é enviada primariamente para o modelo de IA com Function Calling (`consultar_estoque` e `listar_produtos`).
