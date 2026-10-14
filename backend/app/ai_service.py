@@ -936,7 +936,14 @@ class AIService:
         self._carregar_configuracoes()
 
     def _carregar_configuracoes(self):
-        """Recarrega as variáveis de ambiente dinamicamente."""
+        """Recarrega as variáveis de ambiente dinamicamente buscando .env no backend e na raiz."""
+        from pathlib import Path
+        backend_dir = Path(__file__).resolve().parent.parent
+        root_dir = backend_dir.parent
+        for env_path in [backend_dir / ".env", root_dir / ".env", backend_dir / ".env.example"]:
+            if env_path.exists():
+                load_dotenv(dotenv_path=env_path, override=True)
+                break
         load_dotenv(override=True)
         self.grok_api_key = (
             os.getenv("XAI_API_KEY")

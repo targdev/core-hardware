@@ -35,6 +35,65 @@ O assistente integra as IAs **Grok (xAI)** e **Google Gemini** com **Tool / Func
 | `MON-01` | **Monitor Dell UltraSharp 27" 4K** | Monitores | Painel IPS Black (U2723QE), 4K UHD, Hub USB-C 90W | R$ 3.790,00 | **5 unidades** |
 | `GPU-01` | **Nvidia GeForce RTX 4060 Ti 8GB** | Hardware | 8GB GDDR6, Dual Fan, Ray Tracing, DLSS 3 | R$ 2.650,00 | **3 unidades** |
 
+## 🔑 Configuração de Chaves de API (Grok & Gemini)
+
+O assistente foi desenhado com foco em inteligência artificial de ponta utilizando **Tool / Function Calling** nativo. Para que o bot responda consultando o estoque em tempo real via IA, basta configurar a chave de um dos provedores suportados (**Grok da xAI** ou **Google Gemini**):
+
+### 📋 Passo a Passo para Obter as Chaves de API
+
+#### 1. Google Gemini (Recomendado — Gratuito, Rápido e Sem Cartão)
+1. Acesse o **[Google AI Studio](https://aistudio.google.com/app/apikey)**.
+2. Faça login com a sua conta Google (Gmail).
+3. Clique no botão azul **"Create API key"** (Criar chave de API).
+4. Selecione ou crie um projeto padrão do Google Cloud em 1 clique.
+5. Copie a chave gerada (iniciada por `AIzaSy...`).
+6. Cole a chave na variável `GEMINI_API_KEY`.
+> *Vantagem:* Tier gratuito generoso, ativação instantânea sem cartão de crédito e suporte completo a Function Calling com o modelo `gemini-2.5-flash`.
+
+#### 2. Grok (xAI)
+1. Acesse o console oficial da **[xAI Console](https://console.x.ai/)**.
+2. Crie uma conta ou faça login usando sua conta do X (Twitter).
+3. No menu lateral, acesse a seção **API Keys**.
+4. Clique em **Create Key** (ou Gerar Chave), defina um nome (ex: `core-hardware-bot`) e copie o token gerado (formato `xai-...`).
+5. *(Nota de Saldo):* Em contas novas da xAI, certifique-se de habilitar créditos na aba **Billing** para que as requisições ao modelo `grok-2-latest` sejam autorizadas.
+6. Cole a chave na variável `XAI_API_KEY`.
+
+---
+
+### ⚙️ Como Configurar as Variáveis de Ambiente
+
+#### Localmente (via `.env`):
+Copie o modelo de variáveis de ambiente e preencha a chave escolhida:
+```bash
+# Na raiz ou na pasta backend/
+cp .env.example .env
+```
+Exemplo de preenchimento do `.env`:
+```env
+# Provedor padrão: 'auto', 'grok' ou 'gemini'
+LLM_PROVIDER=auto
+
+# Chave do Grok (xAI):
+XAI_API_KEY=sua_chave_grok_aqui
+GROK_MODEL=grok-2-latest
+
+# Chave do Google Gemini (Alternativa gratuita recomendada):
+GEMINI_API_KEY=AIzaSySuaChaveDoGeminiAqui
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+#### No Deploy na Vercel:
+Ao subir o projeto para a **Vercel**, configure as variáveis de ambiente com segurança no painel:
+1. Acesse seu projeto na Vercel e navegue até **Settings** > **Environment Variables**.
+2. Adicione as chaves:
+   - `GEMINI_API_KEY` (ou `XAI_API_KEY`) com o valor da chave obtida no passo a passo acima.
+   - `LLM_PROVIDER`: `auto` (ou `gemini` / `grok`).
+3. Clique em **Save** e faça o redeploy.
+
+> **Hierarquia de Execução & Resiliência:**
+> - **IA Principal Obrigatória (Grok / Gemini):** Toda mensagem é enviada primariamente para o modelo de IA com Function Calling (`consultar_estoque` e `listar_produtos`).
+> - **Fallback de Contingência Opcional:** O mecanismo determinístico atua estritamente como contingência de resiliência caso a API externa apresente instabilidade ou erros de rede, evitando interrupções para o cliente final.
+
 ---
 
 ## 📋 Pré-requisitos
@@ -60,7 +119,7 @@ O assistente integra as IAs **Grok (xAI)** e **Google Gemini** com **Tool / Func
    # python -m pip install -r requirements.txt
    ```
 
-3. Configure as variáveis de ambiente (Opcional):
+3. Configure as variáveis de ambiente no `.env`:
    ```bash
    # Linux / macOS
    cp .env.example .env
@@ -68,7 +127,7 @@ O assistente integra as IAs **Grok (xAI)** e **Google Gemini** com **Tool / Func
    # Windows (PowerShell)
    Copy-Item .env.example .env
    ```
-   > **Nota de Resiliência:** Caso não configure chaves de API (`XAI_API_KEY` ou `GEMINI_API_KEY`), o sistema ativa automaticamente o **Fallback Determinístico Inteligente**, permitindo testar e avaliar 100% das consultas de estoque, comparativos e telemetria sem interrupções.
+   Abra o `.env` e insira sua `GEMINI_API_KEY` ou `XAI_API_KEY` conforme o passo a passo acima.
 
 4. Execute a suíte de testes unitários e de integração:
    ```bash
