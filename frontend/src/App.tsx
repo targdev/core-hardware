@@ -114,7 +114,12 @@ export default function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
+  const API_BASE_URL = (
+    import.meta.env.VITE_API_BASE_URL ||
+    (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+      ? 'https://core-hardware-fmil.vercel.app'
+      : 'http://localhost:8000')
+  ).replace(/\/$/, '');
 
   // Persistir histórico de mensagens no localStorage para memória conversacional contínua
   useEffect(() => {
